@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from 'react'
 import AuthenticatedShell from '../components/layout/AuthenticatedShell'
+import { api } from '../services/api'
 
 interface SettingsPageProps {
   onNavigate: (page: string) => void
@@ -8,6 +9,10 @@ interface SettingsPageProps {
 type TabType = 'profile' | 'appearance' | 'notifications' | 'security' | 'privacy' | 'billing'
 
 export default function SettingsPage({ onNavigate }: SettingsPageProps) {
+  const currentUser = api.getCurrentUser()
+  const profileName = currentUser?.full_name || 'User'
+  const profileEmail = currentUser?.email || ''
+  const profileInitial = profileName.charAt(0).toUpperCase() || 'U'
   const [activeTab, setActiveTab] = useState<TabType>('profile')
   const [isSaving, setIsSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -132,8 +137,8 @@ export default function SettingsPage({ onNavigate }: SettingsPageProps) {
               <div className="rounded-[20px] bg-white border border-[#E5E7EB] p-8 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] hover:shadow-sm transition-shadow">
                 <h2 className="text-[22px] font-bold text-[#111827] mb-6">Personal Information</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-                  <InputField label="Full Name" value="Alex Sundaram" />
-                  <InputField label="Email Address" value="alex@email.com" />
+                  <InputField label="Full Name" value={profileName} />
+                  <InputField label="Email Address" value={profileEmail} />
                   <InputField label="Phone Number" value="+1 (555) 123-4567" />
                   <InputField label="Country" value="United States" />
                   <div>
@@ -351,14 +356,14 @@ export default function SettingsPage({ onNavigate }: SettingsPageProps) {
             <div className="rounded-[20px] bg-white border border-[#E5E7EB] p-6 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] text-center group">
               <div className="relative inline-block mb-4">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#16A34A] to-emerald-400 text-white flex items-center justify-center text-3xl font-display font-bold shadow-md mx-auto overflow-hidden">
-                  A
+                  {profileInitial}
                 </div>
                 <button className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-[12px] text-gray-600 hover:text-gray-900 transition-colors opacity-0 group-hover:opacity-100">
                   ✏️
                 </button>
               </div>
-              <h3 className="text-[18px] font-bold text-[#111827] mb-1">Alex Sundaram</h3>
-              <p className="text-[13px] text-gray-500 font-medium mb-4">alex@email.com</p>
+              <h3 className="text-[18px] font-bold text-[#111827] mb-1">{profileName}</h3>
+              <p className="text-[13px] text-gray-500 font-medium mb-4">{profileEmail}</p>
               
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF8F1] text-[#138A52] text-[13px] font-semibold mb-6">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
@@ -367,7 +372,7 @@ export default function SettingsPage({ onNavigate }: SettingsPageProps) {
 
               <div className="border-t border-gray-100 pt-4 flex justify-between text-[13px]">
                 <span className="text-gray-500">Member Since</span>
-                <span className="font-semibold text-gray-900">July 2026</span>
+                <span className="font-semibold text-gray-900">Current account</span>
               </div>
             </div>
 

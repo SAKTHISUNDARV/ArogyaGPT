@@ -1,4 +1,5 @@
 import { useState, useCallback, type ReactNode } from 'react'
+import { api } from '../../services/api'
 
 const FONT_STEPS = [14, 16, 18, 20]
 const DEFAULT_STEP = 1  // index into FONT_STEPS → 16px
@@ -73,6 +74,10 @@ export default function AuthenticatedShell({
   actionLabel,
   onAction,
 }: AuthenticatedShellProps) {
+  const currentUser = api.getCurrentUser()
+  const profileName = currentUser?.full_name?.trim() || 'User'
+  const profileInitial = profileName.charAt(0).toUpperCase() || 'U'
+  const profileFirstName = profileName.split(/\s+/)[0] || 'User'
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [fontStep, setFontStep] = useState(DEFAULT_STEP)
 
@@ -231,9 +236,9 @@ export default function AuthenticatedShell({
                 aria-label="Open profile menu"
               >
                 <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[#1D9E75] to-[#059669] flex items-center justify-center text-white text-xs font-bold select-none">
-                  A
+                  {profileInitial}
                 </div>
-                <span className="hidden sm:block font-body text-xs font-semibold text-[#18322D] pr-0.5">Alex</span>
+                <span className="hidden sm:block font-body text-xs font-semibold text-[#18322D] pr-0.5">{profileFirstName}</span>
                 <svg className="h-3.5 w-3.5 text-[#8FA49E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>

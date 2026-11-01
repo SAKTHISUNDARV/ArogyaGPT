@@ -10,10 +10,10 @@ interface AuthPageProps {
 export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'signin' }: AuthPageProps) {
   const [isSignUp, setIsSignUp] = useState(initialMode === 'signup')
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('alex@arogyagpt.com')
-  const [password, setPassword] = useState('arogyagpt123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(true)
+  const [rememberMe, setRememberMe] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -62,6 +62,12 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
+
+    if (isSignUp && password !== confirmPassword) {
+      setErrorMsg('Passwords do not match.')
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -69,6 +75,7 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
         await api.register({
           email: email.trim(),
           password,
+          confirm_password: confirmPassword,
           full_name: name.trim() || 'User',
         })
       }
@@ -200,14 +207,15 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4 font-body text-xs">
+            <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4 font-body text-xs">
               {isSignUp && (
                 <div>
                   <label className="block font-medium text-[#4A5E59] mb-1">Full Name</label>
                   <input
                     type="text"
                     required
-                    placeholder="Alex Sundaram"
+                    autoComplete="name"
+                    placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full rounded-full border border-[#DCEBE6] bg-[#FAFAF8] px-4 py-3 text-[#18322D] focus:border-[#1D9E75] focus:outline-none"
@@ -220,7 +228,8 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
                 <input
                   type="email"
                   required
-                  placeholder="alex.sundaram@example.com"
+                  autoComplete={isSignUp ? 'email' : 'username'}
+                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-full border border-[#DCEBE6] bg-[#FAFAF8] px-4 py-3 text-[#18322D] focus:border-[#1D9E75] focus:outline-none"
@@ -232,6 +241,7 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
                 <input
                   type="password"
                   required
+                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

@@ -1,21 +1,27 @@
 import { useState } from 'react'
 import AuthenticatedShell from '../components/layout/AuthenticatedShell'
+import { api } from '../services/api'
 
 interface ProfilePageProps {
   onNavigate: (page: string) => void
 }
 
 export default function ProfilePage({ onNavigate }: ProfilePageProps) {
-  const [name, setName] = useState('Alex Sundaram')
-  const [email] = useState('alex.sundaram@medsimplify.ai')
+  const currentUser = api.getCurrentUser()
+  const [name, setName] = useState(currentUser?.full_name || 'User')
+  const [email] = useState(currentUser?.email || '')
   const [editing, setEditing] = useState(false)
   const [tempName, setTempName] = useState(name)
 // Removed tempEmail state – email is not editable
 
-  const handleSaveProfile = () => {
-    setName(tempName);
-    // Email is not editable – keep existing email unchanged
-    setEditing(false);
+  const handleSaveProfile = async () => {
+    try {
+      const updated = await api.updateProfile(tempName.trim())
+      setName(updated.full_name)
+      setEditing(false)
+    } catch {
+      // Keep the modal open if the profile update fails.
+    }
   }
 
   return (
@@ -29,11 +35,12 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
           
           <div className="p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-                alt="Alex Sundaram"
-                className="h-24 w-24 rounded-full object-cover shadow-sm border-4 border-white ring-1 ring-gray-100"
-              />
+              <div
+                className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-white bg-[#E1F5EE] text-3xl font-bold text-[#1D9E75] shadow-sm ring-1 ring-gray-100"
+                aria-label={name}
+              >
+                {name.charAt(0).toUpperCase() || 'U'}
+              </div>
               <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white ring-2 ring-white">
                 <span className="h-3 w-3 rounded-full bg-[#1D9E75]"></span>
               </span>
@@ -48,7 +55,7 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
                 <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                Member Since Jan 2026
+                Active workspace member
               </p>
             </div>
             
@@ -61,24 +68,20 @@ export default function ProfilePage({ onNavigate }: ProfilePageProps) {
           </div>
         </div>
 
-        {/* Activity Statistics Widgets */}
+        {/* Account Status Widgets */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: 'Reports Uploaded', count: '14', desc: 'PDF, JPG & DOCX files', icon: '📄', color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: 'AI Chat Sessions', count: '8', desc: 'Interactive Q&A', icon: '💬', color: 'text-[#1D9E75]', bg: 'bg-[#E1F5EE]' },
-            { label: 'Terms Learned', count: '48', desc: 'Clinical definitions', icon: '📚', color: 'text-purple-600', bg: 'bg-purple-50' },
-          ].map((stat, idx) => (
-            <div key={idx} className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.bg} ${stat.color} text-2xl transition-transform group-hover:scale-110`}>
-                  {stat.icon}
-                </div>
-                <span className="text-3xl font-extrabold text-gray-900 tracking-tight">{stat.count}</span>
+            { label: 'Account Type', value: currentUser?.role || 'patient', desc: 'Workspace role', bg: 'bg-blue-50', color: 'text-blue-600' },
+            { label: 'Email Status', value: currentUser?.is_email_verified ? 'Verified' : 'Pending', desc: 'Account verification', bg: 'bg-[#E1F5EE]', color: 'text-[#1D9E75]' },
+            { label: 'Workspace', value: currentUser?.is_active ? 'Active' : 'Inactive', desc: 'Current account status', bg: 'bg-purple-50', color: 'text-purple-600' },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${stat.bg} ${stat.color}`}>
+                <span className="text-sm font-bold">{stat.value.slice(0, 1).toUpperCase()}</span>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{stat.label}</h3>
-                <p className="text-xs font-medium text-gray-500">{stat.desc}</p>
-              </div>
+              <span className="text-lg font-bold text-gray-900">{stat.value}</span>
+              <h3 className="mt-1 text-sm font-semibold text-gray-900">{stat.label}</h3>
+              <p className="text-xs font-medium text-gray-500">{stat.desc}</p>
             </div>
           ))}
         </div>

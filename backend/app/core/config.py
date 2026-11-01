@@ -156,8 +156,6 @@ class Settings(BaseSettings):
     LOG_JSON_FORMAT: bool = False
 
     # --- Admin ---
-    FIRST_ADMIN_EMAIL: str = "admin@arogyagpt.com"
-    FIRST_ADMIN_PASSWORD: str = "Admin@12345"
 
     @field_validator("DEBUG", mode="before")
     @classmethod

@@ -166,6 +166,7 @@ export const api = {
   async register(data: {
     email: string
     password: string
+    confirm_password: string
     full_name: string
     preferred_language?: string
     role?: string
@@ -198,6 +199,12 @@ export const api = {
     } catch {
       return null
     }
+  },
+
+  async updateProfile(full_name: string): Promise<User> {
+    const res = await apiClient.put<{ data: User }>('/users/me', { full_name })
+    localStorage.setItem('currentUser', JSON.stringify(res.data.data))
+    return res.data.data
   },
 
   // --- Reports ---
