@@ -28,24 +28,26 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
   const [file, setFile] = useState<File | null>(null)
   const [language, setLanguage] = useState('en')
   const [processing, setProcessing] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [processStep, setProcessStep] = useState(-1)
   const [uploadError, setUploadError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = useCallback((f: File) => {
     if (!f) return
+    const extension = f.name.split('.').pop()?.toLowerCase()
+    const supportedExtensions = ['pdf', 'jpg', 'jpeg', 'png']
+    if (!extension || !supportedExtensions.includes(extension)) {
+      setUploadError('Please select a PDF, JPG, or PNG medical report.')
+      return
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      setUploadError('The file is larger than the 20 MB upload limit.')
+      return
+    }
+
+    setUploadError('')
     setFile(f)
-    setUploadProgress(0)
-    let p = 0
-    const t = window.setInterval(() => {
-      p += Math.random() * 25
-      if (p >= 100) {
-        p = 100
-        window.clearInterval(t)
-      }
-      setUploadProgress(Math.min(p, 100))
-    }, 120)
   }, [])
 
   const onDrop = useCallback((e: DragEvent) => {
@@ -143,10 +145,10 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
             <div className="lg:col-span-8 space-y-6">
               
               {/* Card Container */}
-              <div className="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm">
+              <div className="rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6">
                 
                 {/* Header inside Upload */}
-                <div className="mb-6 flex items-center justify-between border-b border-gray-100 pb-4">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
                   <div>
                     <h3 className="font-display text-lg font-bold text-[#18322D]">Medical Report Importer</h3>
                     <p className="text-xs text-gray-500 font-body mt-0.5">Upload a single lab report to begin processing</p>
@@ -164,15 +166,10 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
 
                 {/* Drop zone */}
                 <div
-                  onClick={() => !file && fileInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={onDrop}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Upload zone — drag and drop or click to browse"
-                  onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
-                  className={`relative flex h-[320px] w-full cursor-pointer select-none flex-col items-center justify-center rounded-2xl border-2 p-6 transition-all duration-300 ${
+                  className={`relative flex min-h-[240px] w-full select-none flex-col items-center justify-center rounded-2xl border-2 p-4 transition-all duration-300 sm:min-h-[300px] sm:p-6 ${
                     dragOver
                       ? 'border-[#1D9E75] bg-[#E8F7F2] shadow-[0_16px_40px_rgba(29,158,117,0.12)] scale-[0.99]'
                       : file
@@ -184,9 +181,24 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
                     ref={fileInputRef}
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
-                    className="sr-only"
+                    className="hidden"
                     aria-label="Choose file"
-                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFile(e.target.files[0])
+                      e.currentTarget.value = ''
+                    }}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    capture="environment"
+                    className="hidden"
+                    aria-label="Take a photo of your report"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleFile(e.target.files[0])
+                      e.currentTarget.value = ''
+                    }}
                   />
 
                   {file ? (
@@ -205,22 +217,16 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
                         <p className="font-mono text-xs text-[#8FA49E] tracking-wider uppercase">{formatBytes(file.size)}</p>
                       </div>
 
-                      <div className="w-full max-w-[340px] space-y-2">
-                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#E7F5EF] p-[2px]">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#1D9E75] to-[#059669] transition-all duration-300 shadow-sm"
-                            style={{ width: `${uploadProgress}%` }}
-                            role="progressbar"
-                            aria-valuenow={uploadProgress}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          />
-                        </div>
-                        <p className="text-[11px] text-gray-400 font-semibold">{Math.round(uploadProgress)}% uploaded</p>
-                      </div>
+                      <p className="text-xs font-semibold text-[#1D9E75]" role="status">
+                        File ready to analyze
+                      </p>
 
                       <button
-                        onClick={(e) => { e.stopPropagation(); setFile(null); setUploadProgress(0) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setFile(null)
+                          setUploadError('')
+                        }}
                         className="font-body text-xs font-bold text-[#4A5E59] hover:text-[#E84040] transition-colors border border-gray-200 hover:border-red-200 bg-white hover:bg-red-50/50 px-4 py-1.5 rounded-full shadow-sm"
                         aria-label="Remove selected file"
                       >
@@ -228,23 +234,45 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center gap-4 px-8 text-center">
+                    <div className="flex flex-col items-center gap-4 px-2 text-center sm:px-8">
                       <div className="rounded-full bg-[#E8F7F2] p-4 text-[#1D9E75] shadow-inner transition-transform duration-300 hover:scale-105">
                         <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
                       <div>
-                        <p className="font-display text-lg font-bold text-[#18322D]">Drag & drop your health report here</p>
-                        <p className="font-body text-sm text-[#5C6E69] mt-1">or click to browse local files on your device</p>
+                        <p className="font-display text-base font-bold text-[#18322D] sm:text-lg">Add your health report</p>
+                        <p className="font-body text-sm text-[#5C6E69] mt-1">Drag and drop or choose a file from your device</p>
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                         {['PDF', 'JPG', 'PNG'].map((t) => (
                           <span key={t} className="rounded-md border border-[#DCEBE6] bg-[#F9FCFA] px-2.5 py-1 font-mono text-[10px] font-bold text-[#4A5E59] shadow-sm">
                             {t}
                           </span>
                         ))}
-                        <span className="text-[11px] text-gray-400 font-medium ml-1">Limit 10MB per file</span>
+                        <span className="w-full text-[11px] text-gray-400 font-medium sm:w-auto sm:ml-1">Limit 20 MB per file</span>
+                      </div>
+                      <div className="mt-1 flex w-full flex-col justify-center gap-2 sm:w-auto sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            fileInputRef.current?.click()
+                          }}
+                          className="min-h-11 w-full rounded-xl border border-[#DCEBE6] bg-white px-5 py-2.5 font-body text-sm font-semibold text-[#18322D] transition hover:border-[#1D9E75] hover:bg-[#F5FCF8] sm:w-auto"
+                        >
+                          Choose a file
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            cameraInputRef.current?.click()
+                          }}
+                          className="min-h-11 w-full rounded-xl bg-[#1D9E75] px-5 py-2.5 font-body text-sm font-semibold text-white transition hover:bg-[#168563] sm:hidden"
+                        >
+                          Take a photo
+                        </button>
                       </div>
                     </div>
                   )}
@@ -253,13 +281,13 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
               </div>
 
               {/* Language selector card */}
-              <div className="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm">
+              <div className="rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6">
                 <div className="mb-4 border-b border-gray-100 pb-3">
                   <h3 className="font-display text-base font-bold text-[#18322D]">Explanation Language Target</h3>
                   <p className="text-xs text-gray-500 font-body mt-0.5">Select your preferred vernacular dialect for the AI translation output</p>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3" role="radiogroup" aria-labelledby="lang-label">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3" role="radiogroup" aria-labelledby="lang-label">
                   {LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
@@ -293,8 +321,8 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleSubmit}
-                  disabled={!file || uploadProgress < 100}
-                  className="w-full sm:w-auto btn-shimmer flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#1D9E75] to-[#059669] px-10 py-4 font-body text-base font-bold text-white shadow-[0_12px_32px_rgba(29,158,117,0.22)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(29,158,117,0.28)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                  disabled={!file}
+                  className="btn-shimmer flex min-h-12 w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#1D9E75] to-[#059669] px-5 py-3 font-body text-sm font-bold text-white shadow-[0_12px_32px_rgba(29,158,117,0.22)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(29,158,117,0.28)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 sm:w-auto sm:px-10 sm:py-4 sm:text-base"
                 >
                   Analyze & Simplify Report
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
@@ -309,7 +337,7 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
             <div className="lg:col-span-4 space-y-6">
               
               {/* HIPAA / Security Info Card */}
-              <div className="rounded-2xl border border-emerald-100 bg-[#F4FBF9] p-5 shadow-sm">
+              <div className="rounded-2xl border border-emerald-100 bg-[#F4FBF9] p-4 shadow-sm sm:p-5">
                 <div className="flex items-start gap-3">
                   <div className="rounded-lg bg-emerald-150 p-2 text-emerald-800 shrink-0">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -317,9 +345,9 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
                     </svg>
                   </div>
                   <div>
-                    <h4 className="font-display text-sm font-bold text-[#18322D]">100% Secure & Compliant</h4>
+                    <h4 className="font-display text-sm font-bold text-[#18322D]">Report privacy</h4>
                     <p className="font-body text-xs text-emerald-950/80 leading-relaxed mt-1">
-                      Your document is processed via enterprise-grade HIPAA compliant architecture. We use end-to-end encryption, and none of your files are stored permanently or shared with third parties.
+                      Reports are associated with your account. AI, translation, or voice features may send report content to configured service providers. Only upload documents you are comfortable processing.
                     </p>
                   </div>
                 </div>
@@ -384,7 +412,7 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
           </div>
         ) : (
           /* Processing state card */
-          <div className="max-w-[640px] mx-auto rounded-2xl border border-[#E3F1EB] bg-white p-10 text-center shadow-md">
+          <div className="mx-auto w-full max-w-[640px] rounded-2xl border border-[#E3F1EB] bg-white p-5 text-center shadow-md sm:p-10">
             <div className="mb-8">
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E8F7F2] shadow-inner">
                 <svg className="h-8 w-8 animate-spin text-[#1D9E75]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -396,7 +424,7 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
               <p className="mt-1 font-body text-xs text-[#8FA49E] font-medium">This typically takes 15–20 seconds</p>
             </div>
 
-            <div className="mx-auto max-w-sm space-y-3.5 text-left border border-gray-100 bg-[#FAFBF9] p-6 rounded-xl shadow-inner" role="status" aria-live="polite">
+            <div className="mx-auto max-w-sm space-y-3.5 text-left border border-gray-100 bg-[#FAFBF9] p-4 rounded-xl shadow-inner sm:p-6" role="status" aria-live="polite">
               {PROCESSING_STEPS.map((step, i) => (
                 <div key={step} className="flex items-center gap-3.5">
                   {i < processStep ? (

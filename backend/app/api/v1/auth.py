@@ -6,8 +6,13 @@ email verification, and password management.
 All endpoints return standardized response envelopes.
 """
 
+import secrets
+from urllib.parse import urlencode
+
+import httpx
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
 from app.core.constants import APIMessage
@@ -29,6 +34,10 @@ from app.schemas.auth import (
 from app.schemas.base import SuccessResponse
 from app.services.auth_service import AuthService
 from app.core.logging import get_logger
+from app.core.security import decode_token
+from app.core.exceptions import AuthenticationError, TokenInvalidError
+from app.models.user import User
+from sqlalchemy import select
 
 logger = get_logger(__name__)
 
@@ -104,6 +113,172 @@ async def login(
         message=APIMessage.LOGIN_SUCCESS,
         data=LoginResponse(
             tokens=tokens,
+            user=UserProfileResponse.model_validate(user),
+        ),
+    )
+
+
+# ==============================================================================
+# Google OAuth
+# ==============================================================================
+
+@router.get("/google/login", summary="Start Google OAuth login")
+async def google_login(request: Request) -> RedirectResponse:
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        return RedirectResponse(
+            url=(
+                f"{settings.GOOGLE_OAUTH_FRONTEND_URL.rstrip('/')}/"
+                "?oauth_error=google_oauth_not_configured#signin"
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    state = secrets.token_urlsafe(32)
+    params = urlencode({
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    })
+    response = RedirectResponse(
+        url=f"https://accounts.google.com/o/oauth2/v2/auth?{params}",
+        status_code=status.HTTP_302_FOUND,
+    )
+    response.set_cookie(
+        key="google_oauth_state",
+        value=state,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+        max_age=600,
+        path="/api/v1/auth/google",
+    )
+    return response
+
+
+@router.get("/google/callback", summary="Complete Google OAuth login")
+async def google_callback(
+    request: Request,
+    db: DBSession,
+    redis: Cache,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    frontend_base = settings.GOOGLE_OAUTH_FRONTEND_URL.rstrip("/")
+
+    def oauth_redirect(error_code: str) -> RedirectResponse:
+        return RedirectResponse(
+            url=f"{frontend_base}/?oauth_error={error_code}#signin",
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    stored_state = request.cookies.get("google_oauth_state")
+    if not state or not stored_state or not secrets.compare_digest(state, stored_state):
+        return oauth_redirect("invalid_oauth_state")
+    if error:
+        return oauth_redirect(error)
+    if not code:
+        return oauth_redirect("missing_authorization_code")
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+            )
+            token_response.raise_for_status()
+            access_token = token_response.json().get("access_token")
+            if not access_token:
+                return oauth_redirect("google_token_exchange_failed")
+
+            profile_response = await client.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            profile_response.raise_for_status()
+            profile = profile_response.json()
+    except httpx.HTTPError:
+        return oauth_redirect("google_profile_fetch_failed")
+
+    email = profile.get("email")
+    if not profile.get("email_verified") or not email:
+        return oauth_redirect("google_email_not_verified")
+
+    service = _get_auth_service(db, redis)
+    user, tokens = await service.google_login(
+        email=email,
+        full_name=profile.get("name", ""),
+        avatar_url=profile.get("picture"),
+        ip_address=get_request_ip(request),
+        user_agent=request.headers.get("User-Agent", ""),
+    )
+
+    response = RedirectResponse(
+        url=f"{frontend_base}/?oauth_success=1#signin",
+        status_code=status.HTTP_302_FOUND,
+    )
+    response.delete_cookie(
+        key="google_oauth_state",
+        path="/api/v1/auth/google",
+    )
+    for key, value, max_age in (
+        ("oauth_access_token", tokens.access_token, settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+        ("oauth_refresh_token", tokens.refresh_token, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60),
+    ):
+        response.set_cookie(
+            key=key,
+            value=value,
+            httponly=True,
+            secure=settings.is_production,
+            samesite="lax",
+            max_age=max_age,
+            path="/api/v1/auth/google",
+        )
+    return response
+
+
+@router.get("/google/session", response_model=SuccessResponse[LoginResponse])
+async def google_session(
+    request: Request,
+    response: Response,
+    db: DBSession,
+) -> SuccessResponse[LoginResponse]:
+    access_token = request.cookies.get("oauth_access_token")
+    refresh_token = request.cookies.get("oauth_refresh_token")
+    if not access_token or not refresh_token:
+        raise AuthenticationError("Google OAuth session is missing or expired.")
+
+    payload = decode_token(access_token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise TokenInvalidError()
+
+    result = await db.execute(select(User).where(User.id == user_id, User.is_deleted == False))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise AuthenticationError("Google OAuth account is unavailable.")
+
+    response.delete_cookie(key="oauth_access_token", path="/api/v1/auth/google")
+    response.delete_cookie(key="oauth_refresh_token", path="/api/v1/auth/google")
+
+    return SuccessResponse(
+        message=APIMessage.LOGIN_SUCCESS,
+        data=LoginResponse(
+            tokens=TokenResponse(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                token_type="bearer",
+                expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            ),
             user=UserProfileResponse.model_validate(user),
         ),
     )

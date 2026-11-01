@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../services/api'
 
 interface AuthPageProps {
@@ -17,6 +17,47 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
   const [submitted, setSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauthError = params.get('oauth_error')
+    if (oauthError) {
+      params.delete('oauth_error')
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}#signin`)
+      setErrorMsg(
+        oauthError === 'google_oauth_not_configured'
+          ? 'Google OAuth is not configured yet.'
+          : 'Google authentication could not be completed.'
+      )
+      return
+    }
+
+    if (!params.has('oauth_success')) return
+
+    setIsLoading(true)
+    api.googleSession()
+      .then(() => {
+        params.delete('oauth_success')
+        const query = params.toString()
+        window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}#signin`)
+        if (onLoginSuccess) {
+          onLoginSuccess()
+        } else {
+          onNavigate('dashboard')
+        }
+      })
+      .catch((err: unknown) => {
+        const apiError = err as {
+          response?: { data?: { message?: string; detail?: string } }
+        }
+        setErrorMsg(
+          apiError.response?.data?.message ||
+          apiError.response?.data?.detail ||
+          'Google authentication failed. Please try again.'
+        )
+      })
+      .finally(() => setIsLoading(false))
+  }, [onLoginSuccess, onNavigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -137,6 +178,26 @@ export default function AuthPage({ onNavigate, onLoginSuccess, initialMode = 'si
                 ✓ Authenticating... Redirecting to Dashboard...
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/api/v1/auth/google/login' }}
+              className="mb-4 flex w-full items-center justify-center gap-3 rounded-full border border-[#DCEBE6] bg-white py-3.5 font-semibold text-[#18322D] shadow-sm transition hover:bg-[#FAFAF8]"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                <path fill="#4285F4" d="M21.35 12.24c0-.74-.07-1.45-.19-2.13H12v4.03h5.25a4.49 4.49 0 0 1-1.95 2.94v3h3.15c1.85-1.7 2.9-4.2 2.9-7.84z"/>
+                <path fill="#34A853" d="M12 21.6c2.63 0 4.84-.87 6.45-2.36l-3.15-2.44c-.87.58-1.98.93-3.3.93-2.53 0-4.67-1.71-5.44-4H3.3v3.06A9.6 9.6 0 0 0 12 21.6z"/>
+                <path fill="#FBBC05" d="M6.56 13.73A5.78 5.78 0 0 1 6.25 12c0-.6.11-1.18.31-1.73V7.21H3.3A9.6 9.6 0 0 0 2.4 12c0 1.55.37 3.02 1.02 4.31l3.14-2.58z"/>
+                <path fill="#EA4335" d="M12 6.27c1.43 0 2.71.49 3.72 1.45l2.79-2.79A9.58 9.58 0 0 0 12 2.4 9.6 9.6 0 0 0 3.3 7.21l3.26 3.06C7.33 7.98 9.47 6.27 12 6.27z"/>
+              </svg>
+              Continue with Google
+            </button>
+
+            <div className="mb-4 flex items-center gap-3 text-[11px] text-[#6B7C77]">
+              <span className="h-px flex-1 bg-[#DCEBE6]" />
+              <span>or use email</span>
+              <span className="h-px flex-1 bg-[#DCEBE6]" />
+            </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4 font-body text-xs">

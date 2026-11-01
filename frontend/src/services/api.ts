@@ -153,6 +153,16 @@ export const api = {
     return res.data.data
   },
 
+  async googleSession(): Promise<LoginResponseData> {
+    const res = await apiClient.get<{ data: LoginResponseData }>('/auth/google/session')
+    const { user, tokens } = res.data.data
+    localStorage.setItem('access_token', tokens.access_token)
+    localStorage.setItem('refresh_token', tokens.refresh_token)
+    localStorage.setItem('isAuthenticated', 'true')
+    localStorage.setItem('currentUser', JSON.stringify(user))
+    return res.data.data
+  },
+
   async register(data: {
     email: string
     password: string

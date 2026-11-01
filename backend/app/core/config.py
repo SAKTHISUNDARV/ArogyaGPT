@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
 
+    # --- Google OAuth ---
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://127.0.0.1:8000/api/v1/auth/google/callback"
+    GOOGLE_OAUTH_FRONTEND_URL: str = "http://127.0.0.1:5173/"
+
     # --- Password Policy ---
     PASSWORD_MIN_LENGTH: int = 8
     PASSWORD_MAX_LENGTH: int = 128

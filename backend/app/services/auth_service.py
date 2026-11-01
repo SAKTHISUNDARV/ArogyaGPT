@@ -5,6 +5,7 @@ password reset, and email verification.
 """
 
 import hashlib
+import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -209,6 +210,73 @@ class AuthService:
         )
 
         logger.info(f"User logged in successfully: {user.email} (id={user.id})")
+
+        token_response = TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        )
+        return user, token_response
+
+    async def google_login(
+        self,
+        email: str,
+        full_name: str,
+        avatar_url: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> tuple[User, TokenResponse]:
+        """Find or create a verified user from an OAuth profile."""
+        normalized_email = email.lower().strip()
+        result = await self.db.execute(
+            select(User).where(
+                User.email == normalized_email,
+                User.is_deleted == False,
+            )
+        )
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(
+                id=str(uuid.uuid4()),
+                email=normalized_email,
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                full_name=full_name.strip() or normalized_email.split("@")[0],
+                role="patient",
+                preferred_language="en",
+                avatar_url=avatar_url,
+                is_active=True,
+                is_email_verified=True,
+            )
+            self.db.add(user)
+            await self.db.flush()
+        else:
+            if not user.is_active:
+                raise AuthenticationError("Your account has been deactivated. Contact support.")
+            if avatar_url and not user.avatar_url:
+                user.avatar_url = avatar_url
+            if not user.is_email_verified:
+                user.is_email_verified = True
+
+        await self.db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(
+                failed_login_attempts=0,
+                locked_until=None,
+                last_login_at=datetime.now(timezone.utc),
+            )
+        )
+
+        access_token = create_access_token(subject=user.id, role=user.role)
+        refresh_token = create_refresh_token(subject=user.id)
+        await self._store_refresh_token(
+            user_id=user.id,
+            refresh_token=refresh_token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
         token_response = TokenResponse(
             access_token=access_token,
