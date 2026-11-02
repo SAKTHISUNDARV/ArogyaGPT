@@ -99,53 +99,6 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables initialized successfully.")
 
-    # Seed default user and admin if not exists
-    try:
-        from sqlalchemy import select
-        from app.models.user import User
-        from app.models.report import Report, LabResult, Abnormality, Diagnosis
-        from app.core.security import hash_password
-        import uuid
-
-        async with AsyncSessionLocal() as session:
-            res = await session.execute(select(User).where(User.email == "alex@arogyagpt.com"))
-            alex_user = res.scalar_one_or_none()
-            if not alex_user:
-                alex_user = User(
-                    id=str(uuid.uuid4()),
-                    email="alex@arogyagpt.com",
-                    hashed_password=hash_password("arogyagpt123"),
-                    full_name="Alex Mercer",
-                    role="patient",
-                    preferred_language="ta",
-                    is_active=True,
-                    is_email_verified=True,
-                )
-                session.add(alex_user)
-                await session.flush()
-                logger.info("Seeded default test user: alex@arogyagpt.com")
-
-            res = await session.execute(select(User).where(User.email == settings.FIRST_ADMIN_EMAIL.lower()))
-            if not res.scalar_one_or_none():
-                admin_user = User(
-                    id=str(uuid.uuid4()),
-                    email=settings.FIRST_ADMIN_EMAIL.lower(),
-                    hashed_password=hash_password(settings.FIRST_ADMIN_PASSWORD),
-                    full_name="System Admin",
-                    role="admin",
-                    is_superuser=True,
-                    preferred_language="en",
-                    is_active=True,
-                    is_email_verified=True,
-                )
-                session.add(admin_user)
-                await session.flush()
-                logger.info(f"Seeded admin user: {settings.FIRST_ADMIN_EMAIL}")
-
-            await session.commit()
-    except Exception as e:
-        logger.warning(f"Database seeding skipped or failed: {e}")
-
 
 async def close_db() -> None:
     """Dispose the database engine connection pool on shutdown."""

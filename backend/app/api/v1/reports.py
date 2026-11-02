@@ -65,7 +65,9 @@ def _validate_file(file: UploadFile) -> str:
     return ext
 
 
-async def _save_file(file: UploadFile, user_id: str) -> tuple[str, str, int, str]:
+async def _save_file(
+    file: UploadFile, user_id: str, content: bytes
+) -> tuple[str, str, int, str]:
     """
     Save uploaded file to local storage.
 
@@ -77,8 +79,6 @@ async def _save_file(file: UploadFile, user_id: str) -> tuple[str, str, int, str
 
     stored_filename = f"{uuid.uuid4()}.{file.filename.rsplit('.', 1)[-1].lower()}"
     file_path = user_dir / stored_filename
-
-    content = await file.read()
 
     # Validate size
     if len(content) > settings.MAX_FILE_SIZE_BYTES:
@@ -124,8 +124,52 @@ async def upload_report(
     # Validate file
     ext = _validate_file(file)
 
+    # Read once so the checksum can be checked before a file or report row is
+    # created.  This makes retries/double-clicks idempotent for each user.
+    content = await file.read()
+    if len(content) > settings.MAX_FILE_SIZE_BYTES:
+        raise FileTooLargeError(settings.MAX_UPLOAD_SIZE_MB)
+    checksum = hashlib.md5(content).hexdigest()
+
+    duplicate_result = await db.execute(
+        select(Report)
+        .join(ReportFile, ReportFile.report_id == Report.id)
+        .where(
+            Report.user_id == current_user.id,
+            Report.is_deleted == False,
+            ReportFile.checksum_md5 == checksum,
+        )
+        .order_by(Report.created_at.desc())
+    )
+    existing_report = duplicate_result.scalars().first()
+    if existing_report:
+        logger.info(
+            f"Duplicate report upload ignored: id={existing_report.id} | "
+            f"user={current_user.email} | file={file.filename}"
+        )
+        return SuccessResponse(
+            message="This report was already uploaded. Opening the existing report.",
+            data=ReportSummaryResponse(
+                id=existing_report.id,
+                title=existing_report.title,
+                report_type=existing_report.report_type,
+                status=existing_report.status,
+                pipeline_stage=existing_report.pipeline_stage,
+                risk_level=existing_report.risk_level,
+                hospital_name=existing_report.hospital_name,
+                report_date=existing_report.report_date,
+                version=existing_report.version,
+                created_at=existing_report.created_at,
+                updated_at=existing_report.updated_at,
+                file_count=1,
+            ),
+            status=status.HTTP_200_OK,
+        )
+
     # Save to disk
-    stored_filename, file_path, file_size, md5 = await _save_file(file, current_user.id)
+    stored_filename, file_path, file_size, md5 = await _save_file(
+        file, current_user.id, content
+    )
 
     # Create report record
     report_id = str(uuid.uuid4())
@@ -454,16 +498,6 @@ async def explain_report_term(
     current_user: VerifiedUser,
     db: DBSession,
 ) -> SuccessResponse[str]:
-    result = await db.execute(
-        select(Report.id).where(
-            Report.id == report_id,
-            Report.user_id == current_user.id,
-            Report.is_deleted == False,
-        )
-    )
-    if result.scalar_one_or_none() is None:
-        raise ReportNotFoundError(identifier=report_id)
-
     explanation = await LLMService().explain_medical_term(
         term=payload.term,
         language=payload.language_code,

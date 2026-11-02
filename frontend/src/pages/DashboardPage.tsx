@@ -46,6 +46,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [filter, setFilter] = useState<StatusType | 'All'>('All')
   const [reports, setReports] = useState<Report[]>([])
   const [totalReports, setTotalReports] = useState(0)
+  const [chatCount, setChatCount] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -59,11 +60,17 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         setReports([])
         setTotalReports(0)
       })
+
+    api.listChatSessions()
+      .then((sessions) => setChatCount(sessions.length))
+      .catch(() => setChatCount(0))
   }, [])
 
-  const mockRecentReports = reports
-
-  const filteredReports = mockRecentReports.filter(report => {
+  const needsAttention = reports.filter((report) =>
+    report.status === 'Needs Review' || report.status === 'Critical'
+  ).length
+  const completedSummaries = reports.filter((report) => report.status === 'Completed').length
+  const filteredReports = reports.filter(report => {
     const matchesSearch = report.type.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           report.hospital.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesFilter = filter === 'All' || report.status === filter
@@ -115,10 +122,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50">
               <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-              +3
-            </span>
           </div>
           <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{totalReports}</h3>
           <p className="text-xs font-medium text-gray-500 mt-0.5">Total Reports</p>
@@ -131,12 +134,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#E1F5EE]">
               <svg className="h-5 w-5 text-[#1D9E75]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-              +5
-            </span>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">18</h3>
+          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{completedSummaries}</h3>
           <p className="text-xs font-medium text-gray-500 mt-0.5">AI Summaries</p>
         </div>
 
@@ -147,11 +146,13 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50">
               <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-              Urgent
-            </span>
+            {needsAttention > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                Urgent
+              </span>
+            )}
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">2</h3>
+          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{needsAttention}</h3>
           <p className="text-xs font-medium text-gray-500 mt-0.5">Needs Attention</p>
         </div>
 
@@ -162,12 +163,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50">
               <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-              +2
-            </span>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">12</h3>
+          <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{chatCount}</h3>
           <p className="text-xs font-medium text-gray-500 mt-0.5">AI Chats</p>
         </div>
       </div>
@@ -204,22 +201,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="flex-1 min-w-0">
               <span className="block text-sm font-semibold text-gray-900 group-hover:text-[#1D9E75] transition-colors">AI Chat</span>
               <span className="block text-xs text-gray-400 mt-0.5">Ask about reports</span>
-            </div>
-            <svg className="h-4 w-4 text-gray-300 group-hover:text-[#1D9E75] transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-          </button>
-
-          {/* Health Library */}
-          <button
-            onClick={() => onNavigate('library')}
-            aria-label="Health Library"
-            className="group flex items-center gap-4 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm transition-all duration-200 hover:border-[#1D9E75]/40 hover:shadow-md text-left"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 transition-transform group-hover:scale-110">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="block text-sm font-semibold text-gray-900 group-hover:text-[#1D9E75] transition-colors">Health Library</span>
-              <span className="block text-xs text-gray-400 mt-0.5">Medical terms & guides</span>
             </div>
             <svg className="h-4 w-4 text-gray-300 group-hover:text-[#1D9E75] transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>

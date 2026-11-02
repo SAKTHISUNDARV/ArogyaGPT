@@ -7,13 +7,16 @@ interface TranslationPageProps {
 }
 
 const STATIC_LANGUAGES = [
-  { language: 'English', code: 'en', tone: 'Patient friendly' },
+  { language: 'English', code: 'en', tone: 'Voice + text' },
   { language: 'Tamil', code: 'ta', tone: 'Voice + text' },
-  { language: 'Hindi', code: 'hi', tone: 'Text only' },
-  { language: 'Malayalam', code: 'ml', tone: 'Text only' },
-  { language: 'Kannada', code: 'kn', tone: 'Voice + text' },
-  { language: 'Telugu', code: 'te', tone: 'Text only' },
-  { language: 'Bengali', code: 'bn', tone: 'Text only' },
+  { language: 'Hindi', code: 'hi', tone: 'Voice + text' },
+  { language: 'Malayalam', code: 'ml', tone: 'Text translation · Voice coming soon' },
+  { language: 'Kannada', code: 'kn', tone: 'Text translation · Voice coming soon' },
+  { language: 'Telugu', code: 'te', tone: 'Text translation · Voice coming soon' },
+  { language: 'Bengali', code: 'bn', tone: 'Text translation · Voice coming soon' },
+  { language: 'Marathi', code: 'mr', tone: 'Text translation · Voice coming soon' },
+  { language: 'Gujarati', code: 'gu', tone: 'Text translation · Voice coming soon' },
+  { language: 'Punjabi', code: 'pa', tone: 'Text translation · Voice coming soon' },
 ]
 
 export default function TranslationPage({ onNavigate }: TranslationPageProps) {

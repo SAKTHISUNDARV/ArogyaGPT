@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../../services/api'
+import { useSpeech } from '../../hooks/useSpeech'
 
 type Status = 'normal' | 'warning' | 'critical'
 
@@ -28,6 +29,35 @@ export interface Insight {
 }
 
 const REPORT_DATA: Section[] = []
+
+const DISCLAIMERS: Record<string, string> = {
+  en: 'This report is for informational purposes only and does not provide medical diagnosis or treatment advice. Consult a qualified doctor for clinical interpretation and medical decisions.',
+  english: 'This report is for informational purposes only and does not provide medical diagnosis or treatment advice. Consult a qualified doctor for clinical interpretation and medical decisions.',
+  ta: 'இந்த அறிக்கை தகவலுக்காக மட்டுமே; இது மருத்துவ நோயறிதல் அல்லது சிகிச்சை ஆலோசனை வழங்காது. மருத்துவ விளக்கத்திற்கும் மருத்துவ முடிவுகளுக்கும் தகுதி பெற்ற மருத்துவரை அணுகவும்.',
+  tamil: 'இந்த அறிக்கை தகவலுக்காக மட்டுமே; இது மருத்துவ நோயறிதல் அல்லது சிகிச்சை ஆலோசனை வழங்காது. மருத்துவ விளக்கத்திற்கும் மருத்துவ முடிவுகளுக்கும் தகுதி பெற்ற மருத்துவரை அணுகவும்.',
+  hi: 'यह रिपोर्ट केवल जानकारी के लिए है और चिकित्सा निदान या उपचार सलाह प्रदान नहीं करती। नैदानिक व्याख्या और चिकित्सा निर्णय के लिए योग्य चिकित्सक से सलाह लें।',
+  hindi: 'यह रिपोर्ट केवल जानकारी के लिए है और चिकित्सा निदान या उपचार सलाह प्रदान नहीं करती। नैदानिक व्याख्या और चिकित्सा निर्णय के लिए योग्य चिकित्सक से सलाह लें।',
+  te: 'ఈ నివేదిక సమాచారం కోసం మాత్రమే; ఇది వైద్య నిర్ధారణ లేదా చికిత్స సలహా ఇవ్వదు. వైద్య వివరణ మరియు నిర్ణయాలకు అర్హులైన వైద్యుడిని సంప్రదించండి.',
+  telugu: 'ఈ నివేదిక సమాచారం కోసం మాత్రమే; ఇది వైద్య నిర్ధారణ లేదా చికిత్స సలహా ఇవ్వదు. వైద్య వివరణ మరియు నిర్ణయాలకు అర్హులైన వైద్యుడిని సంప్రదించండి.',
+  kn: 'ಈ ವರದಿ ಮಾಹಿತಿಗಾಗಿ ಮಾತ್ರ; ಇದು ವೈದ್ಯಕೀಯ ರೋಗನಿರ್ಣಯ ಅಥವಾ ಚಿಕಿತ್ಸಾ ಸಲಹೆಯನ್ನು ನೀಡುವುದಿಲ್ಲ. ವೈದ್ಯಕೀಯ ವ್ಯಾಖ್ಯಾನ ಮತ್ತು ನಿರ್ಧಾರಗಳಿಗಾಗಿ ಅರ್ಹ ವೈದ್ಯರನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+  kannada: 'ಈ ವರದಿ ಮಾಹಿತಿಗಾಗಿ ಮಾತ್ರ; ಇದು ವೈದ್ಯಕೀಯ ರೋಗನಿರ್ಣಯ ಅಥವಾ ಚಿಕಿತ್ಸಾ ಸಲಹೆಯನ್ನು ನೀಡುವುದಿಲ್ಲ. ವೈದ್ಯಕೀಯ ವ್ಯಾಖ್ಯಾನ ಮತ್ತು ನಿರ್ಧಾರಗಳಿಗಾಗಿ ಅರ್ಥ ವೈದ್ಯರನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+  ml: 'ഈ റിപ്പോർട്ട് വിവരങ്ങൾക്കായി മാത്രമുള്ളതാണ്; ഇത് രോഗനിർണയമോ ചികിത്സാ നിർദ്ദേശമോ നൽകുന്നില്ല. ക്ലിനിക്കൽ വ്യാഖ്യാനത്തിനും ആരോഗ്യ തീരുമാനങ്ങൾക്കും യോഗ്യതയുള്ള ഡോക്ടറെ സമീപിക്കുക.',
+  malayalam: 'ഈ റിപ്പോർട്ട് വിവരങ്ങൾക്കായി മാത്രമുള്ളതാണ്; ഇത് രോഗനിർണയമോ ചികിത്സാ നിർദ്ദേശമോ നൽകുന്നില്ല. ക്ലിനിക്കൽ വ്യാഖ്യാനത്തിനും ആരോഗ്യ തീരുമാനങ്ങൾക്കും യോഗ്യതയുള്ള ഡോക്ടറെ സമീപിക്കുക.',
+  bn: 'এই রিপোর্টটি শুধুমাত্র তথ্যের জন্য এবং চিকিৎসাগত নির্ণয় বা চিকিৎসার পরামর্শ প্রদান করে না। ক্লিনিক্যাল ব্যাখ্যা ও চিকিৎসা সিদ্ধান্তের জন্য যোগ্য চিকিৎসকের পরামর্শ নিন।',
+  bengali: 'এই রিপোর্টটি শুধুমাত্র তথ্যের জন্য এবং চিকিৎসাগত নির্ণয় বা চিকিৎসার পরামর্শ প্রদান করে না। ক্লিনিক্যাল ব্যাখ্যা ও চিকিৎসা সিদ্ধান্তের জন্য যোগ্য চিকিৎসকের পরামর্শ নিন।',
+  mr: 'हा अहवाल फक्त माहितीसाठी आहे आणि वैद्यकीय निदान किंवा उपचारांचा सल्ला देत नाही. क्लिनिकल स्पष्टीकरण आणि वैद्यकीय निर्णयांसाठी पात्र डॉक्टरांचा सल्ला घ्या।',
+  marathi: 'हा अहवाल फक्त माहितीसाठी आहे आणि वैद्यकीय निदान किंवा उपचारांचा सल्ला देत नाही. क्लिनिकल स्पष्टीकरण आणि वैद्यकीय निर्णयांसाठी पात्र डॉक्टरांचा सल्ला घ्या।',
+  gu: 'આ રિપોર્ટ માત્ર માહિતી માટે છે અને તબીબી નિદાન અથવા સારવારની સલાહ આપતું નથી. તબીબી અર્થઘટન અને નિર્ણયો માટે સપ્રમાણિત ડોક્ટરની સલાહ લો.',
+  gujarati: 'આ રિપોર્ટ માત્ર માહિતી માટે છે અને તબીબી નિદાન અથવા સારવારની સલાહ આપતું નથી. તબીબી અર્થઘટન અને નિર્ણયો માટે સપ્રમાણિત ડોક્ટરની સલાહ લો.',
+  pa: 'ਇਹ ਰਿਪੋਰਟ ਸਿਰਫ ਜਾਣਕਾਰੀ ਲਈ ਹੈ ਅਤੇ ਡਾਕਟਰੀ ਨਿਸ਼ਚਿਤਤਾ ਜਾਂ ਇਲਾਜ ਦੀ ਸਲਾਹ ਨਹੀਂ ਦਿੰਦੀ। ਕਲੀਨਿਕਲ ਵਿਆਖਿਆ ਅਤੇ ਇਲਾਜ ਦੇ ਫੈਸਲਿਆਂ ਲਈ ਯੋਗ ਡਾਕਟਰ ਨਾਲ ਸਲਾਹ ਕਰੋ।',
+  punjabi: 'ਇਹ ਰਿਪੋਰਟ ਸਿਰਫ ਜਾਣਕਾਰੀ ਲਈ ਹੈ ਅਤੇ ਡਾਕਟਰੀ ਨਿਸ਼ਚਿਤਤਾ ਜਾਂ ਇਲਾਜ ਦੀ ਸਲਾਹ ਨਹੀਂ ਦਿੰਦੀ। ਕਲੀਨਿਕਲ ਵਿਆਖਿਆ ਅਤੇ ਇਲਾਜ ਦੇ ਫੈਸਲਿਆਂ ਲਈ ਯੋਗ ਡਾਕਟਰ ਨਾਲ ਸਲਾਹ ਕਰੋ।',
+  or: 'ଏହି ରିପୋର୍ଟ କେବଳ ସୂଚନା ପାଇଁ ଏବଂ ଏହା ଚିକିତ୍ସା ନିର୍ଣ୍ଣୟ କିମ୍ବା ଚିକିତ୍ସା ପରାମର୍ଶ ଦିଏ ନାହିଁ। କ୍ଲିନିକାଲ ବ୍ୟାଖ୍ୟା ଓ ନିର୍ଣ୍ଣୟ ପାଇଁ ଯୋଗ୍ୟ ଡାକ୍ତରଙ୍କୁ ପରାମର୍ଶ କରନ୍ତୁ।',
+  odia: 'ଏହି ରିପୋର୍ଟ କେବଳ ସୂଚନା ପାଇଁ ଏବଂ ଏହା ଚିକିତ୍ସା ନିର୍ଣ୍ଣୟ କିମ୍ବା ଚିକିତ୍ସା ପରାମର୍ଶ ଦିଏ ନାହିଁ। କ୍ଲିନିକାଲ ବ୍ୟାଖ୍ୟା ଓ ନିର୍ଣ୍ଣୟ ପାଇଁ ଯୋଗ୍ୟ ଡାକ୍ତରଙ୍କୁ ପରାମର୍ଶ କରନ୍ତୁ।',
+  ur: 'یہ رپورٹ صرف معلومات کے لیے ہے اور طبی تشخیص یا علاج کی مشورہ نہیں دیتی۔ طبی تشریح اور فیصلوں کے لیے اہل ڈاکٹر سے مشورہ کریں۔',
+  urdu: 'یہ رپورٹ صرف معلومات کے لیے ہے اور طبی تشخیص یا علاج کی مشورہ نہیں دیتی۔ طبی تشریح اور فیصلوں کے لیے اہل ڈاکٹر سے مشورہ کریں۔',
+}
+
+const getDisclaimer = (language: string) => DISCLAIMERS[language.toLowerCase().trim()] || DISCLAIMERS.en
 
 interface ReportPanelProps {
   sections?: Section[]
@@ -83,6 +113,7 @@ export default function ReportPanel({
   const [activeTab, setActiveTab] = useState<ReportTab>('simplified')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 'Complete Blood Count': true, 'Diagnostic Report': true, 'Laboratory Findings': true })
   const [filter, setFilter] = useState<'all' | Status>('all')
+  const [explainingTerm, setExplainingTerm] = useState<string | null>(null)
 
   const toggleSection = (name: string) =>
     setExpanded(p => ({ ...p, [name]: !p[name] }))
@@ -147,6 +178,10 @@ export default function ReportPanel({
               />
             </div>
 
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 font-body text-xs leading-relaxed text-amber-900">
+              <strong>Medical disclaimer:</strong> {getDisclaimer(language)}
+            </div>
+
             {/* Sections */}
             <div className="space-y-3">
               {activeData.map(section => {
@@ -199,17 +234,10 @@ export default function ReportPanel({
                                         .replace(/\*(.*?)\*/g, '<em>$1</em>'),
                                     }}
                                   />
-                                  {reportId && term.length > 0 && term.length <= 300 && (
-                                    <TermInfoButton
-                                      reportId={reportId}
-                                      term={term}
-                                      language={language}
-                                    />
-                                  )}
                                 </div>
-                              )
-                            })}
-                          </div>
+                                )
+                              })}
+                            </div>
                         ) : (
                           section.params.map(param => (
                             <div
@@ -222,9 +250,15 @@ export default function ReportPanel({
                                     <span className="text-status-critical font-bold text-base" aria-label="Critical value">!</span>
                                   )}
                                   <span className="font-body text-base font-medium text-text-primary">{param.name}</span>
-                                  {reportId && (
-                                    <TermInfoButton reportId={reportId} term={param.name} language={language} />
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setExplainingTerm(param.name)}
+                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white border border-brand-primary/20 transition-all cursor-pointer flex-shrink-0"
+                                    title={`What does "${param.name}" mean? Click to explain in ${language}`}
+                                    aria-label={`Explain ${param.name} in ${language}`}
+                                  >
+                                    i
+                                  </button>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                   <span className={`font-mono text-base font-semibold
@@ -298,7 +332,20 @@ export default function ReportPanel({
                                  px-4 py-3 rounded-lg
                                  ${i % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-base/50'}`}
                   >
-                    <span className="font-body text-base text-text-primary truncate">{param.name}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-body text-base text-text-primary truncate" title={param.name}>
+                        {param.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExplainingTerm(param.name)}
+                        className="inline-flex items-center justify-center w-5 h-5 flex-shrink-0 rounded-full text-xs font-bold bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white border border-brand-primary/20 transition-all cursor-pointer"
+                        title={`What does "${param.name}" mean? Click to explain in ${language}`}
+                        aria-label={`Explain ${param.name} in ${language}`}
+                      >
+                        i
+                      </button>
+                    </div>
                     <span className={`font-mono text-sm font-semibold
                       ${param.status === 'critical' ? 'text-status-critical'
                         : param.status === 'warning' ? 'text-status-warning'
@@ -333,8 +380,8 @@ export default function ReportPanel({
                   icon={insight.icon}
                   title={insight.title}
                   body={insight.body}
-                  reportId={reportId}
                   language={language}
+                  onExplainTerm={(term) => setExplainingTerm(term)}
                   sections={[
                     { q: 'Clinical Significance', a: insight.body },
                     { q: 'Recommended Action', a: 'Discuss this finding with your physician for clinical evaluation and treatment guidance.' },
@@ -345,26 +392,57 @@ export default function ReportPanel({
           </div>
         )}
       </div>
+
+      {/* Medical Term Explainer Modal */}
+      {explainingTerm && (
+        <TermExplanationModal
+          term={explainingTerm}
+          reportId={reportId}
+          language={language}
+          onClose={() => setExplainingTerm(null)}
+        />
+      )}
     </div>
   )
 }
 
-function InsightCard({ icon, title, body, sections, reportId, language }: {
-  icon: string; title: string; body: string
+function InsightCard({
+  icon,
+  title,
+  body,
+  sections,
+  language,
+  onExplainTerm,
+}: {
+  icon: string
+  title: string
+  body: string
   sections: { q: string; a: string }[]
-  reportId?: string
   language: string
+  onExplainTerm: (term: string) => void
 }) {
   const [open, setOpen] = useState<number | null>(null)
+  const cleanTerm = title.split(':')[0].trim()
+
   return (
-    <div className="bg-bg-surface rounded-lg shadow-card border border-[rgba(46,125,107,0.08)] p-6 card-hover">
+    <div className="bg-bg-surface rounded-xl shadow-card border border-[rgba(46,125,107,0.12)] p-6 card-hover transition-all">
       <div className="text-4xl mb-4" aria-hidden="true">{icon}</div>
-      <div className="flex items-start gap-2 mb-3">
-        <h3 className="font-display text-xl font-medium text-text-primary tracking-[-0.01em]">{title}</h3>
-        {reportId && <TermInfoButton reportId={reportId} term={title} language={language} />}
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <h3 className="font-display text-xl font-medium text-text-primary tracking-[-0.01em] flex-1 min-w-[200px]">
+          {title}
+        </h3>
+        <button
+          type="button"
+          onClick={() => onExplainTerm(cleanTerm)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary border border-brand-primary/25 text-xs font-semibold transition-all cursor-pointer flex-shrink-0 shadow-xs"
+          title={`Explain what "${cleanTerm}" means in ${language}`}
+        >
+          <span className="w-4 h-4 rounded-full bg-brand-primary/20 flex items-center justify-center text-[10px] font-bold">i</span>
+          <span>Explain Term</span>
+        </button>
       </div>
       <p
-        className="font-body text-md text-text-secondary leading-[1.7] mb-5"
+        className="font-body text-base text-text-secondary leading-[1.7] mb-5"
         dangerouslySetInnerHTML={{
           __html: body
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -407,71 +485,187 @@ const LANGUAGE_CODES: Record<string, string> = {
   bengali: 'bn',
   marathi: 'mr',
   gujarati: 'gu',
+  punjabi: 'pa',
+  odia: 'or',
+  urdu: 'ur',
 }
 
-function TermInfoButton({
-  reportId,
+function TermExplanationModal({
   term,
+  reportId,
   language,
+  onClose,
 }: {
-  reportId: string
   term: string
+  reportId?: string
   language: string
+  onClose: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [explanation, setExplanation] = useState('')
   const [error, setError] = useState('')
+  const { speak, stop, isSpeaking } = useSpeech()
 
-  const handleClick = async () => {
-    if (open) {
-      setOpen(false)
-      return
+  // Clean term (remove trailing values or colons if present)
+  const cleanTerm = term.split(':')[0].trim()
+
+  useEffect(() => {
+    let active = true
+    const fetchExplanation = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const langCode = LANGUAGE_CODES[language.toLowerCase()] || 'en'
+        const res = await api.explainReportTerm(reportId, cleanTerm, langCode)
+        if (active) {
+          setExplanation(res)
+        }
+      } catch {
+        if (active) {
+          setError('Could not load the explanation. Please try again.')
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
     }
-    setOpen(true)
-    if (explanation || loading) return
 
-    setLoading(true)
-    setError('')
-    try {
-      const response = await api.explainReportTerm(
-        reportId,
-        term,
-        LANGUAGE_CODES[language.toLowerCase()] || 'en'
-      )
-      setExplanation(response)
-    } catch {
-      setError('Could not load the explanation. Please try again.')
-    } finally {
-      setLoading(false)
+    fetchExplanation()
+    return () => {
+      active = false
+      stop()
+    }
+  }, [cleanTerm, language, reportId])
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        stop()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, stop])
+
+  const handleToggleSpeak = () => {
+    if (isSpeaking) {
+      stop()
+    } else if (explanation) {
+      speak(explanation, language)
     }
   }
 
   return (
-    <span className="relative inline-flex flex-shrink-0">
-      <button
-        type="button"
-        onClick={handleClick}
-        aria-label={`Explain ${term} in ${language}`}
-        aria-expanded={open}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-brand-primary/30 text-xs font-semibold text-brand-secondary hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/40"
-        title={`Explain in ${language}`}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+      onClick={() => { stop(); onClose() }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="term-modal-title"
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl bg-bg-surface border border-[rgba(46,125,107,0.2)] p-6 shadow-2xl space-y-4 max-h-[88vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
       >
-        i
-      </button>
-      {open && (
-        <span
-          role="status"
-          className="absolute left-0 top-full z-30 mt-2 w-64 rounded-lg border border-brand-primary/15 bg-bg-surface p-3 text-left font-body text-sm leading-6 text-text-secondary shadow-elevated"
-        >
-          {loading ? 'Generating explanation…' : error || explanation}
-          {explanation && (
-            <span className="mt-2 block text-xs text-text-muted">
-              For general understanding only. Please discuss the report with your clinician.
-            </span>
+        {/* Modal Header */}
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-[rgba(46,125,107,0.12)]">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-semibold tracking-wide uppercase">
+                Medical Term Explainer
+              </span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-bg-base border border-brand-primary/15 text-text-secondary font-medium">
+                🌐 {language}
+              </span>
+            </div>
+            <h3 id="term-modal-title" className="font-display text-xl sm:text-2xl font-medium text-text-primary leading-snug">
+              {cleanTerm}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => { stop(); onClose() }}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-base transition-colors flex-shrink-0 cursor-pointer"
+            aria-label="Close dialog"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin py-2">
+          {loading ? (
+            <div className="py-10 flex flex-col items-center justify-center gap-3 text-center">
+              <div className="w-10 h-10 rounded-full border-2 border-brand-primary/20 border-t-brand-primary animate-spin" />
+              <p className="font-body text-sm text-text-secondary">
+                Asking Groq AI to explain <strong className="text-text-primary">"{cleanTerm}"</strong> in {language}...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="py-6 text-center space-y-3">
+              <p className="text-sm text-status-critical">⚠️ {error}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true)
+                  setError('')
+                  const langCode = LANGUAGE_CODES[language.toLowerCase()] || 'en'
+                  api.explainReportTerm(reportId, cleanTerm, langCode)
+                    .then(setExplanation)
+                    .catch(() => setError('Could not load the explanation. Please try again.'))
+                    .finally(() => setLoading(false))
+                }}
+                className="px-4 py-2 rounded-lg bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="font-body text-base text-text-primary leading-[1.8] whitespace-pre-line bg-bg-base/50 p-4 rounded-xl border border-brand-primary/10">
+                {explanation}
+              </div>
+
+              {/* Audio Listen Bar */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-brand-primary/[0.06] border border-brand-primary/15">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔊</span>
+                  <span className="text-xs font-medium text-text-primary">
+                    {isSpeaking ? `Reading aloud in ${language}...` : `Listen to explanation in ${language}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleSpeak}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm
+                    ${isSpeaking
+                      ? 'bg-status-critical text-white hover:bg-status-critical/90'
+                      : 'bg-brand-primary text-white hover:bg-brand-primary/90'}`}
+                >
+                  <span>{isSpeaking ? '⏹ Stop' : '▶ Play'}</span>
+                </button>
+              </div>
+            </div>
           )}
-        </span>
-      )}
-    </span>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="pt-3 border-t border-[rgba(46,125,107,0.12)] flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[11px] text-text-muted leading-tight max-w-xs">
+            💡 Educational explanation powered by Groq AI. Always consult your doctor for clinical diagnosis.
+          </p>
+          <button
+            type="button"
+            onClick={() => { stop(); onClose() }}
+            className="px-5 py-2 rounded-xl bg-brand-primary text-white font-medium text-sm hover:bg-brand-primary/90 transition-all cursor-pointer shadow-sm"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

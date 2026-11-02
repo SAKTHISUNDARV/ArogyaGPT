@@ -3,6 +3,7 @@ ArogyaGPT - LLM Service (Groq Async Client)
 Medical report simplification, summarization, and intelligent Q&A using Groq LLM.
 """
 
+import re
 from typing import Optional
 from groq import AsyncGroq
 
@@ -41,13 +42,14 @@ Target Language: {language}
 
 Simplified Explanation:"""
 
-SUMMARY_PROMPT_TEMPLATE = """Create a very brief 3-5 sentence summary of this simplified medical report for a patient:
+SUMMARY_PROMPT_TEMPLATE = """Create a brief summary in exactly 2 short sentences for a patient:
 
 {simplified_text}
 
 Instructions:
-1. Provide a concise summary.
-2. STRICT MULTILINGUAL REQUIREMENT: You MUST write the summary completely in {language}. Do not use English unless the term has no translation.
+1. Mention only the most important finding and the recommended next step.
+2. Keep the complete summary under 55 words.
+3. STRICT MULTILINGUAL REQUIREMENT: Write completely in {language}. Do not use English unless the term has no translation.
 
 Summary:"""
 
@@ -68,7 +70,8 @@ CHAT_PROMPT_TEMPLATE = """You are ArogyaGPT, a medical AI assistant for Indian p
 3. If the report does not contain the information needed to answer, respond EXACTLY: "This information is not available in your report. Please consult your doctor for further guidance."
 4. Use simple, compassionate, patient-friendly language. Explain medical terms in plain words.
 5. Always end with a brief reminder to consult their doctor for clinical decisions — but do NOT make this the primary response.
-6. STRICT MULTILINGUAL REQUIREMENT: You MUST write your ENTIRE response in {target_language}.
+6. Keep the response concise: answer in 3-5 sentences unless more detail is essential for safety.
+7. STRICT MULTILINGUAL REQUIREMENT: You MUST write your ENTIRE response in {target_language}.
    - If Tamil: respond completely in Tamil script (தமிழ்), do NOT mix English.
    - If Hindi: respond completely in Hindi Devanagari script (हिन्दी), do NOT mix English.
    - If Telugu: respond completely in Telugu script (తెలుగు), do NOT mix English.
@@ -112,6 +115,30 @@ LANGUAGE_MAP: dict[str, str] = {
     "urdu": "Urdu (اردو - write strictly in Urdu script)",
 }
 
+LANGUAGE_SCRIPTS: dict[str, str] = {
+    "hi": r"[\u0900-\u097f]",
+    "mr": r"[\u0900-\u097f]",
+    "ta": r"[\u0b80-\u0bff]",
+    "te": r"[\u0c00-\u0c7f]",
+    "kn": r"[\u0c80-\u0cff]",
+    "ml": r"[\u0d00-\u0d7f]",
+    "bn": r"[\u0980-\u09ff]",
+    "gu": r"[\u0a80-\u0aff]",
+    "pa": r"[\u0a00-\u0a7f]",
+    "or": r"[\u0b00-\u0b7f]",
+    "ur": r"[\u0600-\u06ff]",
+}
+
+
+def _needs_script_translation(text: str, language_code: str) -> bool:
+    script_pattern = LANGUAGE_SCRIPTS.get(language_code)
+    if not script_pattern:
+        return False
+
+    alphabetic_characters = sum(character.isalpha() for character in text)
+    script_characters = len(re.findall(script_pattern, text))
+    return alphabetic_characters == 0 or script_characters / alphabetic_characters < 0.35
+
 
 class LLMService:
     """
@@ -120,12 +147,28 @@ class LLMService:
 
     def __init__(self) -> None:
         self._client: Optional[AsyncGroq] = None
-        self._candidate_models = [
+        self._candidate_models = list(dict.fromkeys([
             settings.GROQ_MODEL_NAME,
             "qwen/qwen3.8-27b",
             "openai/gpt-oss-20b",
             "openai/gpt-oss-120b",
-        ]
+        ]))
+
+    async def _ensure_target_language(self, text: str, language_code: str) -> str:
+        """Translate generated text when it does not contain the target script."""
+        language_code = language_code.strip().lower()
+        if language_code == "en" or not _needs_script_translation(text, language_code):
+            return text
+        try:
+            from app.services.translation_service import TranslationService
+            return await TranslationService().translate(
+                text=text,
+                target_lang=language_code,
+                source_lang="auto",
+            )
+        except Exception as e:
+            logger.warning(f"Post-generation translation failed for {language_code}: {e}")
+            return text
 
     def _get_client(self) -> AsyncGroq:
         """Lazy-load the Groq Async client."""
@@ -184,7 +227,7 @@ class LLMService:
                 for d in diagnoses
             ]) or "No diagnostic flags identified."
 
-            return f"""### Medical Report Analysis
+            fallback = f"""### Medical Report Analysis
 Findings extracted from your document:
 
 #### Findings & Alerts:
@@ -193,8 +236,10 @@ Findings extracted from your document:
 #### Clinical Conditions:
 {diag_str}
 
-*Explanation prepared in {target_lang}.*
 Please consult your doctor for personalized medical advice."""
+            if language.strip().lower() != "en":
+                return await self._ensure_target_language(fallback, language.strip().lower())
+            return fallback
 
         try:
             abnorm_text = "\n".join([
@@ -216,6 +261,7 @@ Please consult your doctor for personalized medical advice."""
             )
 
             result = await self._generate(prompt, max_tokens=settings.GROQ_MAX_TOKENS, temperature=settings.GROQ_TEMPERATURE)
+            result = await self._ensure_target_language(result, language)
             logger.info(f"LLM simplification complete | {len(result)} chars | lang={language}")
             return result
 
@@ -227,15 +273,18 @@ Please consult your doctor for personalized medical advice."""
         """Generate a brief summary from already-simplified report text."""
         target_lang = LANGUAGE_MAP.get(language.strip().lower(), language)
         if not settings.GROQ_API_KEY:
-            return "Report analysis completed. Please review findings above."
+            fallback_summary = "Report analysis completed. Please review findings above."
+            if language.strip().lower() != "en":
+                return await self._ensure_target_language(fallback_summary, language.strip().lower())
+            return fallback_summary
 
         try:
             prompt = SUMMARY_PROMPT_TEMPLATE.format(
                 simplified_text=simplified_text[:3000],
                 language=target_lang,
             )
-            result = await self._generate(prompt, max_tokens=250, temperature=0.2)
-            return result
+            result = await self._generate(prompt, max_tokens=120, temperature=0.2)
+            return await self._ensure_target_language(result, language)
         except Exception as e:
             logger.error(f"LLM summary generation failed: {e}")
             return "Summary unavailable."
@@ -295,8 +344,7 @@ Explanation:"""
         target_lang = LANGUAGE_MAP.get(language.strip().lower(), language)
 
         if not settings.GROQ_API_KEY:
-            logger.warning("GROQ_API_KEY not configured. Generating mock Q&A answer.")
-            return f"You asked: '{question}'. Groq API is not configured. Please add GROQ_API_KEY to backend/.env."
+            raise LLMServiceError("GROQ_API_KEY is not configured.")
 
         try:
             prompt = CHAT_PROMPT_TEMPLATE.format(
@@ -305,7 +353,20 @@ Explanation:"""
                 question=question,
                 target_language=target_lang,
             )
-            result = await self._generate(prompt, max_tokens=1000, temperature=0.1)
+            result = await self._generate(prompt, max_tokens=512, temperature=0.1)
+            language_code = language.strip().lower()
+            if _needs_script_translation(result, language_code):
+                from app.services.translation_service import TranslationService
+
+                result = await TranslationService().translate(
+                    text=result,
+                    target_lang=language_code,
+                    source_lang="auto",
+                )
+                if _needs_script_translation(result, language_code):
+                    raise LLMServiceError(
+                        f"The response could not be generated in {target_lang}."
+                    )
             return result
         except Exception as e:
             logger.error(f"LLM Q&A failed: {e}")

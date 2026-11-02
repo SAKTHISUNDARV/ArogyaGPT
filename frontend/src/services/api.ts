@@ -153,9 +153,20 @@ export const api = {
     return res.data.data
   },
 
+  async googleSession(): Promise<LoginResponseData> {
+    const res = await apiClient.get<{ data: LoginResponseData }>('/auth/google/session')
+    const { user, tokens } = res.data.data
+    localStorage.setItem('access_token', tokens.access_token)
+    localStorage.setItem('refresh_token', tokens.refresh_token)
+    localStorage.setItem('isAuthenticated', 'true')
+    localStorage.setItem('currentUser', JSON.stringify(user))
+    return res.data.data
+  },
+
   async register(data: {
     email: string
     password: string
+    confirm_password: string
     full_name: string
     preferred_language?: string
     role?: string
@@ -188,6 +199,12 @@ export const api = {
     } catch {
       return null
     }
+  },
+
+  async updateProfile(full_name: string): Promise<User> {
+    const res = await apiClient.put<{ data: User }>('/users/me', { full_name })
+    localStorage.setItem('currentUser', JSON.stringify(res.data.data))
+    return res.data.data
   },
 
   // --- Reports ---
@@ -239,11 +256,12 @@ export const api = {
   },
 
   async explainReportTerm(
-    reportId: string,
+    reportId: string | undefined,
     term: string,
     languageCode: string
   ): Promise<string> {
-    const res = await apiClient.post<{ data: string }>(`/reports/${reportId}/explain`, {
+    const id = reportId || 'general'
+    const res = await apiClient.post<{ data: string }>(`/reports/${id}/explain`, {
       term,
       language_code: languageCode,
     })
@@ -275,8 +293,8 @@ export const api = {
     report_id: string
     target_language: string
     text_to_translate?: string
-  }): Promise<Record<string, unknown>> {
-    const res = await apiClient.post<{ data: Record<string, unknown> }>('/translation/translate', payload)
+  }): Promise<Translation> {
+    const res = await apiClient.post<{ data: Translation }>('/translation/translate', payload)
     return res.data.data
   },
 
@@ -294,5 +312,11 @@ export const api = {
     const res = await apiClient.post<{ data: { id: string; audio_file_url?: string } }>('/voice/generate', payload)
     return res.data.data
   },
-}
 
+  async downloadVoiceAudio(id: string): Promise<Blob> {
+    const res = await apiClient.get<Blob>(`/voice/${id}/download`, {
+      responseType: 'blob',
+    })
+    return res.data
+  },
+}

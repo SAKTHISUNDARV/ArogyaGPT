@@ -68,6 +68,8 @@ class TranslationService:
         self, text: str, target_lang: str, source_lang: str
     ) -> str:
         """Translate a single text chunk using the configured provider."""
+        last_error: Exception | None = None
+
         # Try deep-translator first
         try:
             from deep_translator import GoogleTranslator
@@ -83,6 +85,7 @@ class TranslationService:
             logger.warning("deep-translator not installed. Trying googletrans...")
         except Exception as e:
             logger.warning(f"deep-translator failed: {e}. Trying googletrans...")
+            last_error = e
 
         # Fallback: googletrans
         try:
@@ -92,6 +95,7 @@ class TranslationService:
             return result.text
         except Exception as e:
             logger.warning(f"googletrans failed: {e}. Trying Groq LLM translation...")
+            last_error = e
 
         # Fallback: Groq LLM
         try:
@@ -107,9 +111,12 @@ class TranslationService:
             if res and len(res.strip()) > 0:
                 return res.strip()
         except Exception as e:
-            logger.warning(f"Groq LLM translation failed: {e}. Falling back to original text.")
+            logger.warning(f"Groq LLM translation failed: {e}.")
+            last_error = e
 
-        return f"[{LANGUAGE_NAMES.get(target_lang, target_lang)} Translation]\n{text}"
+        raise TranslationError(
+            f"Could not translate the text into {LANGUAGE_NAMES.get(target_lang, target_lang)}."
+        ) from last_error
 
     @staticmethod
     def _split_into_chunks(text: str, max_length: int) -> list[str]:

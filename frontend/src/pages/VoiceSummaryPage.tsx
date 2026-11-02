@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AuthenticatedShell from '../components/layout/AuthenticatedShell'
 import { api } from '../services/api'
 
@@ -7,13 +7,16 @@ interface VoiceSummaryPageProps {
 }
 
 const LANGUAGES = [
-  { label: 'English', code: 'en' },
-  { label: 'Tamil', code: 'ta' },
-  { label: 'Hindi', code: 'hi' },
-  { label: 'Malayalam', code: 'ml' },
-  { label: 'Kannada', code: 'kn' },
-  { label: 'Telugu', code: 'te' },
-  { label: 'Bengali', code: 'bn' },
+  { label: 'English', code: 'en', voiceAvailable: true },
+  { label: 'Tamil', code: 'ta', voiceAvailable: true },
+  { label: 'Hindi', code: 'hi', voiceAvailable: true },
+  { label: 'Malayalam', code: 'ml', voiceAvailable: false },
+  { label: 'Kannada', code: 'kn', voiceAvailable: false },
+  { label: 'Telugu', code: 'te', voiceAvailable: false },
+  { label: 'Bengali', code: 'bn', voiceAvailable: false },
+  { label: 'Marathi', code: 'mr', voiceAvailable: false },
+  { label: 'Gujarati', code: 'gu', voiceAvailable: false },
+  { label: 'Punjabi', code: 'pa', voiceAvailable: false },
 ]
 
 const SPEEDS = ['0.75x', '1.0x', '1.25x', '1.5x']
@@ -24,28 +27,62 @@ export default function VoiceSummaryPage({ onNavigate }: VoiceSummaryPageProps) 
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
 
   const reportId = localStorage.getItem('activeReportId') ?? ''
+
+  const clearAudio = () => {
+    audioRef.current?.pause()
+    audioRef.current = null
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+    }
+    setAudioUrl(null)
+    setIsPlaying(false)
+  }
+
+  useEffect(() => () => {
+    audioRef.current?.pause()
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
+  }, [])
 
   const handleGenerate = async () => {
     setIsGenerating(true)
     setError(null)
+    clearAudio()
     try {
-      const summaryText =
-        'Your blood sugar is significantly elevated and requires medical attention. ' +
-        'Blood count is largely normal with minor dips in hemoglobin and platelets. ' +
-        'An appointment with your physician is strongly advised.'
+      const report = reportId ? await api.getReport(reportId) : null
+      let summaryText = report?.translations.find(
+        (translation) => translation.language_code === selectedLang,
+      )?.translated_text
+      if (!summaryText && report) {
+        const sourceText = report.summary || report.simplified_text
+        if (selectedLang !== 'en' && sourceText) {
+          const translation = await api.translateReport({
+            report_id: reportId,
+            target_language: selectedLang,
+            text_to_translate: sourceText || undefined,
+          }) as { translated_text?: string }
+          summaryText = translation.translated_text
+        } else {
+          summaryText = sourceText || undefined
+        }
+      }
+      if (!summaryText) {
+        setError('A report summary is not available in the selected language yet.')
+        return
+      }
       const result = await api.generateVoice({
         text: summaryText,
         language_code: selectedLang,
         report_id: reportId || undefined,
       })
-      if (result?.audio_file_url) {
-        setAudioUrl(result.audio_file_url)
-      } else {
-        setError('Voice generated but no audio URL returned. Backend may need TTS configured.')
-      }
+      const audioBlob = await api.downloadVoiceAudio(result.id)
+      const objectUrl = URL.createObjectURL(audioBlob)
+      audioUrlRef.current = objectUrl
+      setAudioUrl(objectUrl)
     } catch (error: unknown) {
       const apiError = error as { response?: { data?: { detail?: string } } }
       setError(apiError.response?.data?.detail ?? 'Voice generation failed. Please try again.')
@@ -57,20 +94,20 @@ export default function VoiceSummaryPage({ onNavigate }: VoiceSummaryPageProps) 
 
   const handlePlay = () => {
     if (!audioUrl) { handleGenerate(); return }
-    if (audio) {
-      audio.play()
-      setIsPlaying(true)
-    } else {
-      const a = new Audio(audioUrl)
-      a.onended = () => setIsPlaying(false)
-      a.play()
-      setAudio(a)
-      setIsPlaying(true)
-    }
+    const audio = audioRef.current ?? new Audio(audioUrl)
+    audioRef.current = audio
+    audio.onended = () => setIsPlaying(false)
+    audio.play().then(() => setIsPlaying(true)).catch(() => {
+      setError('Audio playback failed. Please generate the voice summary again.')
+    })
   }
 
-  const handlePause = () => { audio?.pause(); setIsPlaying(false) }
-  const handleResume = () => { audio?.play(); setIsPlaying(true) }
+  const handlePause = () => { audioRef.current?.pause(); setIsPlaying(false) }
+  const handleResume = () => {
+    audioRef.current?.play().then(() => setIsPlaying(true)).catch(() => {
+      setError('Audio playback failed. Please generate the voice summary again.')
+    })
+  }
 
   return (
     <AuthenticatedShell
@@ -145,14 +182,20 @@ export default function VoiceSummaryPage({ onNavigate }: VoiceSummaryPageProps) 
               {LANGUAGES.map((lang) => (
                 <button
                   key={lang.code}
-                  onClick={() => { setSelectedLang(lang.code); setAudioUrl(null); setAudio(null); setIsPlaying(false) }}
+                  type="button"
+                  disabled={!lang.voiceAvailable}
+                  title={lang.voiceAvailable ? `${lang.label} voice is available` : `${lang.label} voice support is coming soon`}
+                  onClick={() => { setSelectedLang(lang.code); clearAudio() }}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                    !lang.voiceAvailable
+                      ? 'cursor-not-allowed border border-[#E5E7EB] bg-[#F8FAFC] text-[#94A3B8]'
+                      :
                     selectedLang === lang.code
                       ? 'bg-[#1D9E75] text-white'
                       : 'border border-[#DCEBE6] bg-white text-[#18322D] hover:bg-[#EAF8F1]'
                   }`}
                 >
-                  {lang.label}
+                  {lang.label}{!lang.voiceAvailable && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide">Coming soon</span>}
                 </button>
               ))}
             </div>

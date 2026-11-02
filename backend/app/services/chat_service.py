@@ -23,7 +23,6 @@ from app.core.exceptions import (
     ReportNotFoundError,
     ResourceNotFoundError,
     RAGIndexingError,
-    LLMServiceError,
 )
 from app.core.logging import get_logger
 from app.models.chat import ChatSession, ChatMessage
@@ -249,19 +248,12 @@ class ChatService:
         await self.db.commit()
 
         # ---- Call LLM ----
-        try:
-            answer = await self.llm.answer_question(
-                question=payload.question,
-                context=context_text,
-                chat_history=history_text,
-                language=target_lang,
-            )
-        except LLMServiceError as e:
-            logger.error(f"LLM failed for session {session.id}: {e}")
-            answer = (
-                "I'm sorry, the AI service is temporarily unavailable. "
-                "Please try again in a moment."
-            )
+        answer = await self.llm.answer_question(
+            question=payload.question,
+            context=context_text,
+            chat_history=history_text,
+            language=target_lang,
+        )
 
         latency_ms = (time.perf_counter() - start_time) * 1000
 

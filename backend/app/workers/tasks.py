@@ -170,6 +170,34 @@ async def _pipeline_async(
             detection_service = AbnormalDetectionService()
             lab_results, abnormalities = await detection_service.analyze(cleaned_text, entities)
 
+            if language != "en":
+                try:
+                    from app.services.translation_service import TranslationService
+                    translator = TranslationService()
+
+                    for lab_result in lab_results:
+                        for field in ("test_name", "reference_range"):
+                            original = lab_result.get(field)
+                            if original:
+                                lab_result[field] = await translator.translate(
+                                    text=str(original), target_lang=language, source_lang="en"
+                                )
+
+                    for abnormality in abnormalities:
+                        for field in (
+                            "parameter_name", "reference_range_text",
+                            "clinical_significance", "plain_language_explanation"
+                        ):
+                            original = abnormality.get(field)
+                            if original:
+                                abnormality[field] = await translator.translate(
+                                    text=str(original), target_lang=language, source_lang="en"
+                                )
+                except Exception as translation_error:
+                    logger.warning(
+                        f"Structured report translation failed for {language}: {translation_error}"
+                    )
+
             from app.models.report import LabResult, Abnormality
             for lr in lab_results:
                 db.add(LabResult(report_id=report_id, **lr))

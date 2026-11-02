@@ -122,7 +122,7 @@ export default function App() {
     setIsAuthenticated(false)
     localStorage.setItem('isAuthenticated', 'false')
     localStorage.removeItem('redirectAfterLogin')
-    goToPage('signin')
+    goToPage('home')
   }
 
   const handleAuthSuccess = () => {
@@ -133,7 +133,7 @@ export default function App() {
     goToPage(PROTECTED_PAGES.includes(redirect) || PUBLIC_PAGES.includes(redirect) ? redirect : 'dashboard')
   }
 
-  const showGlobalNavbar = PUBLIC_PAGES.includes(page)
+  const showGlobalNavbar = PUBLIC_PAGES.includes(page) && page !== 'signin' && page !== 'report'
 
   return (
     <div className={`min-h-screen bg-bg-base font-body fs-${fontSize}`}>

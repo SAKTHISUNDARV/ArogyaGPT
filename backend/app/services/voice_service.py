@@ -25,7 +25,26 @@ GTTS_LANG_MAP = {
     "bn": "bn",
     "gu": "gu",
     "pa": "pa",
+    "or": "or",
     "ur": "ur",
+}
+
+# Azure voice names are not interchangeable across Indian languages.  In
+# particular, the previous Telugu voice name (``Moana``) is not a Telugu
+# voice, which made Azure reject the request before it could create audio.
+AZURE_VOICE_MAP = {
+    "en": "en-IN-NeerjaNeural",
+    "hi": "hi-IN-SwaraNeural",
+    "ta": "ta-IN-PallaviNeural",
+    "te": "te-IN-ShrutiNeural",
+    "kn": "kn-IN-SapnaNeural",
+    "ml": "ml-IN-SobhanaNeural",
+    "mr": "mr-IN-AarohiNeural",
+    "bn": "bn-IN-TanishaaNeural",
+    "gu": "gu-IN-DhwaniNeural",
+    "pa": "pa-IN-AshleenNeural",
+    "or": "or-IN-SubhasiniNeural",
+    "ur": "ur-IN-GulNeural",
 }
 
 
@@ -125,21 +144,13 @@ class VoiceService:
                 speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
             )
 
-            # Map language codes to Azure voice names
-            voice_map = {
-                "en": "en-IN-NeerjaNeural",
-                "hi": "hi-IN-SwaraNeural",
-                "ta": "ta-IN-PallaviNeural",
-                "te": "te-IN-MoanaNeural",
-                "kn": "kn-IN-SapnaNeural",
-                "ml": "ml-IN-SobhanaNeural",
-                "mr": "mr-IN-AarohiNeural",
-                "bn": "bn-IN-TanishaaNeural",
-                "gu": "gu-IN-DhwaniNeural",
-            }
-            speech_config.speech_synthesis_voice_name = voice_map.get(
-                language_code, "en-IN-NeerjaNeural"
-            )
+            voice_name = AZURE_VOICE_MAP.get(language_code)
+            if not voice_name:
+                logger.warning(
+                    f"Azure TTS voice unavailable for {language_code}; falling back to gTTS."
+                )
+                return await self._gtts(text, language_code, output_path)
+            speech_config.speech_synthesis_voice_name = voice_name
 
             audio_config = speechsdk.audio.AudioOutputConfig(filename=output_path)
             synthesizer = speechsdk.SpeechSynthesizer(
