@@ -293,8 +293,8 @@ export const api = {
     report_id: string
     target_language: string
     text_to_translate?: string
-  }): Promise<Record<string, unknown>> {
-    const res = await apiClient.post<{ data: Record<string, unknown> }>('/translation/translate', payload)
+  }): Promise<Translation> {
+    const res = await apiClient.post<{ data: Translation }>('/translation/translate', payload)
     return res.data.data
   },
 

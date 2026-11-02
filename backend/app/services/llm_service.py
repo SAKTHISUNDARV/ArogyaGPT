@@ -42,13 +42,14 @@ Target Language: {language}
 
 Simplified Explanation:"""
 
-SUMMARY_PROMPT_TEMPLATE = """Create a very brief 3-5 sentence summary of this simplified medical report for a patient:
+SUMMARY_PROMPT_TEMPLATE = """Create a brief summary in exactly 2 short sentences for a patient:
 
 {simplified_text}
 
 Instructions:
-1. Provide a concise summary.
-2. STRICT MULTILINGUAL REQUIREMENT: You MUST write the summary completely in {language}. Do not use English unless the term has no translation.
+1. Mention only the most important finding and the recommended next step.
+2. Keep the complete summary under 55 words.
+3. STRICT MULTILINGUAL REQUIREMENT: Write completely in {language}. Do not use English unless the term has no translation.
 
 Summary:"""
 
@@ -153,6 +154,22 @@ class LLMService:
             "openai/gpt-oss-120b",
         ]))
 
+    async def _ensure_target_language(self, text: str, language_code: str) -> str:
+        """Translate generated text when it does not contain the target script."""
+        language_code = language_code.strip().lower()
+        if language_code == "en" or not _needs_script_translation(text, language_code):
+            return text
+        try:
+            from app.services.translation_service import TranslationService
+            return await TranslationService().translate(
+                text=text,
+                target_lang=language_code,
+                source_lang="auto",
+            )
+        except Exception as e:
+            logger.warning(f"Post-generation translation failed for {language_code}: {e}")
+            return text
+
     def _get_client(self) -> AsyncGroq:
         """Lazy-load the Groq Async client."""
         if self._client is None:
@@ -210,7 +227,7 @@ class LLMService:
                 for d in diagnoses
             ]) or "No diagnostic flags identified."
 
-            return f"""### Medical Report Analysis
+            fallback = f"""### Medical Report Analysis
 Findings extracted from your document:
 
 #### Findings & Alerts:
@@ -219,8 +236,10 @@ Findings extracted from your document:
 #### Clinical Conditions:
 {diag_str}
 
-*Explanation prepared in {target_lang}.*
 Please consult your doctor for personalized medical advice."""
+            if language.strip().lower() != "en":
+                return await self._ensure_target_language(fallback, language.strip().lower())
+            return fallback
 
         try:
             abnorm_text = "\n".join([
@@ -242,6 +261,7 @@ Please consult your doctor for personalized medical advice."""
             )
 
             result = await self._generate(prompt, max_tokens=settings.GROQ_MAX_TOKENS, temperature=settings.GROQ_TEMPERATURE)
+            result = await self._ensure_target_language(result, language)
             logger.info(f"LLM simplification complete | {len(result)} chars | lang={language}")
             return result
 
@@ -253,15 +273,18 @@ Please consult your doctor for personalized medical advice."""
         """Generate a brief summary from already-simplified report text."""
         target_lang = LANGUAGE_MAP.get(language.strip().lower(), language)
         if not settings.GROQ_API_KEY:
-            return "Report analysis completed. Please review findings above."
+            fallback_summary = "Report analysis completed. Please review findings above."
+            if language.strip().lower() != "en":
+                return await self._ensure_target_language(fallback_summary, language.strip().lower())
+            return fallback_summary
 
         try:
             prompt = SUMMARY_PROMPT_TEMPLATE.format(
                 simplified_text=simplified_text[:3000],
                 language=target_lang,
             )
-            result = await self._generate(prompt, max_tokens=250, temperature=0.2)
-            return result
+            result = await self._generate(prompt, max_tokens=120, temperature=0.2)
+            return await self._ensure_target_language(result, language)
         except Exception as e:
             logger.error(f"LLM summary generation failed: {e}")
             return "Summary unavailable."

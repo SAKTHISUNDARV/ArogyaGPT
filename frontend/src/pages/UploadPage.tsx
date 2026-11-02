@@ -2,6 +2,12 @@ import { useCallback, useRef, useState, type DragEvent } from 'react'
 import AuthenticatedShell from '../components/layout/AuthenticatedShell'
 import { api } from '../services/api'
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English', ta: 'Tamil', hi: 'Hindi', te: 'Telugu', kn: 'Kannada',
+  ml: 'Malayalam', mr: 'Marathi', bn: 'Bengali', gu: 'Gujarati',
+  pa: 'Punjabi',
+}
+
 const LANGUAGES = [
   { code: 'en', native: 'English', english: 'English', flag: '🌐' },
   { code: 'ta', native: 'தமிழ்', english: 'Tamil', flag: '🇮🇳' },
@@ -9,7 +15,10 @@ const LANGUAGES = [
   { code: 'te', native: 'తెలుగు', english: 'Telugu', flag: '🇮🇳' },
   { code: 'kn', native: 'ಕನ್ನಡ', english: 'Kannada', flag: '🇮🇳' },
   { code: 'ml', native: 'മലയാളം', english: 'Malayalam', flag: '🇮🇳' },
+  { code: 'mr', native: 'मराठी', english: 'Marathi', flag: '🇮🇳' },
   { code: 'bn', native: 'বাংলা', english: 'Bengali', flag: '🇮🇳' },
+  { code: 'gu', native: 'ગુજરાતી', english: 'Gujarati', flag: '🇮🇳' },
+  { code: 'pa', native: 'ਪੰਜਾਬੀ', english: 'Punjabi', flag: '🇮🇳' },
 ]
 
 const PROCESSING_STEPS = [
@@ -69,6 +78,8 @@ export default function UploadPage({ onNavigate }: UploadPageProps) {
         preferred_language: language,
       })
       localStorage.setItem('activeReportId', report.id)
+      localStorage.setItem('activeReportLanguageCode', language)
+      localStorage.setItem('activeReportLanguage', LANGUAGE_NAMES[language] || 'English')
 
       // Animate progress steps while polling status
       setProcessStep(1)

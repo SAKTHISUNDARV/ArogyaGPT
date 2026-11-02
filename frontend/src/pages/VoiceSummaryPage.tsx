@@ -17,8 +17,6 @@ const LANGUAGES = [
   { label: 'Marathi', code: 'mr', voiceAvailable: false },
   { label: 'Gujarati', code: 'gu', voiceAvailable: false },
   { label: 'Punjabi', code: 'pa', voiceAvailable: false },
-  { label: 'Odia', code: 'or', voiceAvailable: false },
-  { label: 'Urdu', code: 'ur', voiceAvailable: false },
 ]
 
 const SPEEDS = ['0.75x', '1.0x', '1.25x', '1.5x']

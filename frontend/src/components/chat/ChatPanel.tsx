@@ -27,8 +27,6 @@ const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: 'mr', name: 'Marathi', native: 'मराठी' },
   { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
   { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
-  { code: 'or', name: 'Odia', native: 'ଓଡ଼ିଆ' },
-  { code: 'ur', name: 'Urdu', native: 'اردو' },
 ]
 
 const SUGGESTED_BY_LANG: Record<string, string[]> = {

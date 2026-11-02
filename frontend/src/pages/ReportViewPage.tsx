@@ -5,13 +5,16 @@ import PdfExportContent from '../components/report/PdfExportContent'
 import { useSpeech } from '../hooks/useSpeech'
 import { api, ReportDetail } from '../services/api'
 
-import html2pdf from 'html2pdf.js'
 
 interface ReportViewPageProps {
   onNavigate: (page: 'home' | 'upload' | 'report') => void
 }
 
-const AVAILABLE_LANGUAGES = ['Tamil', 'English', 'Hindi', 'Telugu', 'Kannada', 'Malayalam', 'Bengali', 'Marathi', 'Gujarati']
+const AVAILABLE_LANGUAGES = ['English', 'Tamil', 'Hindi', 'Telugu', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi']
+const LANGUAGE_CODES: Record<string, string> = {
+  English: 'en', Tamil: 'ta', Hindi: 'hi', Telugu: 'te', Kannada: 'kn',
+  Malayalam: 'ml', Marathi: 'mr', Bengali: 'bn', Gujarati: 'gu', Punjabi: 'pa',
+}
 
 type DownloadState = 'idle' | 'generating' | 'done'
 
@@ -72,7 +75,8 @@ function mapReportToInsights(detail: ReportDetail) {
 
 export default function ReportViewPage({ onNavigate }: ReportViewPageProps) {
   const [mobileTab, setMobileTab] = useState<'report' | 'chat'>('report')
-  const [language, setLanguage] = useState('English')
+  const initialLanguage = localStorage.getItem('activeReportLanguage') || 'English'
+  const [language, setLanguage] = useState(initialLanguage)
 
   const [reportData, setReportData] = useState<ReportDetail | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -88,9 +92,35 @@ export default function ReportViewPage({ onNavigate }: ReportViewPageProps) {
         const data = await api.getReport(reportId)
         if (active) {
           setReportData(data)
-          if (data.translations && data.translations.length > 0) {
+          const persistedLanguage = localStorage.getItem('activeReportLanguage')
+          const persistedCode = localStorage.getItem('activeReportLanguageCode')
+          if (persistedLanguage) {
+            setLanguage(persistedLanguage)
+          } else if (persistedCode && data.translations?.length) {
+            const matching = data.translations.find((translation) => translation.language_code === persistedCode)
+            if (matching) setLanguage(matching.language_name || 'English')
+          } else if (data.translations && data.translations.length > 0) {
             setLanguage(data.translations[0].language_name || 'English')
           }
+
+          if (persistedCode && persistedCode !== 'en' && data.status === 'completed') {
+            const hasTranslation = data.translations?.some((translation) => translation.language_code === persistedCode)
+            if (!hasTranslation) {
+              api.translateReport({
+                report_id: data.id,
+                target_language: persistedCode,
+                text_to_translate: data.summary || data.simplified_text || '',
+              }).then((translation) => {
+                if (!active) return
+                setReportData((current) => {
+                  if (!current) return current
+                  const others = current.translations.filter((item) => item.language_code !== persistedCode)
+                  return { ...current, translations: [...others, translation] }
+                })
+              }).catch((error) => console.warn('Could not translate existing report summary:', error))
+            }
+          }
+
           if (data.status === 'processing' || data.status === 'pending') {
             setIsProcessing(true)
           } else {
@@ -145,60 +175,92 @@ export default function ReportViewPage({ onNavigate }: ReportViewPageProps) {
   const activeTitle = reportData?.title || "Medical Report"
   const activeSections = reportData ? mapReportToSections(reportData) : []
   const activeInsights = reportData ? mapReportToInsights(reportData) : []
-  const activeSummary =
+  const handleLanguageChange = async (languageName: string) => {
+    setLanguage(languageName)
+    localStorage.setItem('activeReportLanguage', languageName)
+    const targetCode = LANGUAGE_CODES[languageName]
+    if (targetCode) localStorage.setItem('activeReportLanguageCode', targetCode)
+    if (!reportData || !languageName || languageName === 'English') return
+
+    if (!targetCode) return
+
+    try {
+      const translation = await api.translateReport({
+        report_id: reportData.id,
+        target_language: targetCode,
+        text_to_translate: reportData.summary || reportData.simplified_text || activeSummary,
+      })
+      setReportData((current) => {
+        if (!current) return current
+        const others = current.translations.filter((item) => item.language_code !== targetCode)
+        return { ...current, translations: [...others, translation] }
+      })
+    } catch (err) {
+      console.warn('Could not translate report summary:', err)
+    }
+  }
+  const selectedTranslation = reportData?.translations?.find((translation) => {
+    const selected = language.toLowerCase()
+    const code = translation.language_code.toLowerCase()
+    const name = translation.language_name.toLowerCase()
+    return code === selected || name === selected
+  })
+  const fullSummary =
+    selectedTranslation?.translated_text ||
     reportData?.summary ||
     reportData?.simplified_text ||
     "Your medical report has been processed by ArogyaGPT. Review each laboratory parameter and consult your doctor for medical advice."
+  const summarySentences = fullSummary.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.slice(0, 2) || []
+  const activeSummary = summarySentences.join(' ').trim().slice(0, 420)
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     setDownloadState('generating')
     setDownloadError(false)
-    const element = document.getElementById('pdf-export-content')
-    if (!element) {
+
+    const escapeHtml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+
+    const abnormalCount = activeSections.reduce((total, section) =>
+      total + section.params.filter((param) => param.status !== 'normal').length, 0)
+    const valueCount = activeSections.reduce((total, section) => total + section.params.length, 0)
+    const disclaimer = language === 'Tamil'
+      ? 'இந்த அறிக்கை தகவலுக்காக மட்டுமே; இது மருத்துவ நோயறிதல் அல்லது சிகிச்சை ஆலோசனை வழங்காது. தகுதி பெற்ற மருத்துவரை அணுகவும்.'
+      : 'This report is for informational purposes only and does not provide medical diagnosis or treatment advice. Consult a qualified doctor.'
+
+    const printable = window.open('', '_blank', 'width=900,height=700')
+    if (!printable) {
       setDownloadError(true)
       setDownloadState('idle')
-      setTimeout(() => setDownloadError(false), 4000)
       return
     }
 
-    const date = new Date().toISOString().slice(0, 10)
-    const cleanFilename = activeTitle.replace(/[^a-zA-Z0-9_-]/g, '_')
-    const captureElement = element.cloneNode(true) as HTMLElement
-    captureElement.id = 'pdf-export-capture'
-    Object.assign(captureElement.style, {
-      position: 'fixed',
-      left: '0',
-      top: '0',
-      visibility: 'visible',
-      zIndex: '-1',
-      pointerEvents: 'none',
-    })
-    document.body.appendChild(captureElement)
+    const sectionsHtml = activeSections.map((section) => {
+      const abnormal = section.params.filter((param) => param.status !== 'normal').length
+      const rows = section.params.map((param) => `
+        <tr>
+          <td><strong>${escapeHtml(param.name)}</strong><div class="plain">${escapeHtml(param.plain)}</div></td>
+          <td class="value">${escapeHtml(param.value)} ${escapeHtml(param.unit)}</td>
+          <td>${escapeHtml(param.range)}</td>
+          <td><span class="status ${param.status}">${escapeHtml(param.status === 'normal' ? 'Normal' : param.status === 'warning' ? 'Borderline' : 'Abnormal')}</span></td>
+        </tr>`).join('')
+      return `<section><div class="section-title"><h3>${escapeHtml(section.name)}</h3><span>${section.params.length} values · ${abnormal} abnormal</span></div><table><thead><tr><th>Parameter</th><th>Your Value</th><th>Normal Range</th><th>Status</th></tr></thead><tbody>${rows || `<tr><td colspan="4">${escapeHtml(activeSummary)}</td></tr>`}</tbody></table></section>`
+    }).join('')
 
-    const options = {
-      margin:      [12, 10, 12, 10] as [number, number, number, number],
-      filename:    `ArogyaGPT-${cleanFilename}-${date}.pdf`,
-      image:       { type: 'jpeg' as const, quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#FDFCFA' },
-      jsPDF:       { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const },
-      // Let long reports paginate naturally.  `avoid-all` can force a blank
-      // first page when a section is taller than one A4 page.
-      pagebreak:   { mode: ['css', 'legacy'], avoid: '.pdf-section' },
-    }
+    const insightsHtml = activeInsights.map((insight) => `<div class="insight"><strong>${escapeHtml(insight.title)}</strong><div>${escapeHtml(insight.body)}</div></div>`).join('')
 
-    try {
-      await document.fonts.ready
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      await html2pdf().set(options).from(captureElement).save()
+    printable.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(activeTitle)}</title><style>
+      @page{size:A4;margin:12mm}body{font-family:Arial,sans-serif;color:#18322d;margin:0;font-size:12px}.header{background:#18322d;color:white;padding:18px 22px;display:flex;justify-content:space-between}.brand{font-size:20px;font-weight:bold}.meta{text-align:right}.summary{border:1px solid #d9e8e2;border-left:4px solid #1d9e75;border-radius:8px;margin:16px 0;padding:14px 16px}.summary h2,.section-title h3{margin:0 0 8px}.summary p{margin:0;line-height:1.55}.report-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dfe9e5;padding:10px 0}section{break-inside:avoid;margin-top:14px}.section-title{display:flex;justify-content:space-between;align-items:center}.section-title span{color:#a96e2e;font-size:11px}table{width:100%;border-collapse:collapse}th{background:#edf5f1;text-align:left;color:#587068;font-size:10px;text-transform:uppercase;padding:7px 8px;border-bottom:1px solid #dfe9e5}td{border-bottom:1px solid #edf0ee;padding:8px;vertical-align:top}.plain{font-size:10px;color:#6b7c77;margin-top:3px}.value{font-family:monospace;font-weight:bold}.status{padding:3px 7px;border-radius:12px;font-size:10px;font-weight:bold}.status.normal{color:#2d7a56;background:#ebf7f1}.status.warning{color:#a96e2e;background:#fef3e8}.status.critical{color:#a03030;background:#fdecea}.insight{border:1px solid #e1e8e5;border-radius:8px;padding:10px;margin-bottom:8px}.insight strong{display:block;margin-bottom:4px}.disclaimer{margin-top:16px;border-top:1px solid #dfe9e5;padding-top:10px;color:#6b7c77;font-size:10px}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+    </style></head><body><div class="header"><div><div class="brand">ArogyaGPT</div>Simplified Medical Report</div><div class="meta"><strong>${escapeHtml(activeTitle)}</strong><br>${escapeHtml(language)}</div></div><div class="summary"><h2>Report Summary</h2><p>${escapeHtml(activeSummary)}</p></div><div class="report-head"><strong>Lab Report</strong><span>${valueCount} values · ${abnormalCount} abnormal</span></div>${sectionsHtml}<h3>Health Insights &amp; Recommendations</h3>${insightsHtml}<div class="disclaimer"><strong>Medical disclaimer:</strong> ${escapeHtml(disclaimer)}</div></body></html>`)
+    printable.document.close()
+    printable.focus()
+    printable.onload = () => {
+      printable.print()
       setDownloadState('done')
       setTimeout(() => setDownloadState('idle'), 2000)
-    } catch (error) {
-      console.error('PDF report generation failed:', error)
-      setDownloadError(true)
-      setDownloadState('idle')
-      setTimeout(() => setDownloadError(false), 4000)
-    } finally {
-      captureElement.remove()
     }
   }
 
@@ -257,7 +319,7 @@ export default function ReportViewPage({ onNavigate }: ReportViewPageProps) {
                          hover:border-brand-glow/40 transition-colors duration-fast min-h-[40px] relative">
               <select
                 value={language}
-                onChange={(e) => setLanguage(e.target.value)}
+                onChange={(e) => { void handleLanguageChange(e.target.value) }}
                 className="appearance-none bg-transparent outline-none cursor-pointer pr-4 text-text-secondary"
                 aria-label="Change language"
               >
@@ -430,7 +492,7 @@ export default function ReportViewPage({ onNavigate }: ReportViewPageProps) {
                        ${mobileTab === 'report' ? 'hidden md:flex' : 'flex'}`}
         >
           <div className="min-h-0 flex-1 overflow-hidden flex flex-col p-4 md:p-6">
-            <ChatPanel selectedLanguage={language} onLanguageChange={setLanguage} />
+            <ChatPanel selectedLanguage={language} onLanguageChange={(selected) => { void handleLanguageChange(selected) }} />
           </div>
         </div>
       </div>

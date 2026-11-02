@@ -11,8 +11,6 @@ const langCodeMap: Record<string, string> = {
   'Marathi': 'mr-IN',
   'Gujarati': 'gu-IN',
   'Punjabi': 'pa-IN',
-  'Odia': 'or-IN',
-  'Urdu': 'ur-IN',
   'English': 'en-IN'
 };
 

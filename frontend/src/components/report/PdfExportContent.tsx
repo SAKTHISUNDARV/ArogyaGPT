@@ -16,6 +16,29 @@ interface PdfSection {
   params: PdfParam[]
 }
 
+const PDF_DISCLAIMER_MAP: Record<string, string> = {
+  en: 'This report is for informational purposes only. Consult your doctor for medical advice.',
+  English: 'This report is for informational purposes only. Consult your doctor for medical advice.',
+  ta: 'இந்த அறிக்கை தகவலுக்காக மட்டுமே. மருத்துவ ஆலோசனைக்கு உங்கள் மருத்துவரை அணுகவும்.',
+  Tamil: 'இந்த அறிக்கை தகவலுக்காக மட்டுமே. மருத்துவ ஆலோசனைக்கு உங்கள் மருத்துவரை அணுகவும்.',
+  hi: 'यह रिपोर्ट केवल जानकारी के लिए है। चिकित्सा सलाह के लिए अपने चिकित्सक से मिलें।',
+  Hindi: 'यह रिपोर्ट केवल जानकारी के लिए है। चिकित्सा सलाह के लिए अपने चिकित्सक से मिलें।',
+  te: 'ఈ నివేదిక సమాచారం కోసం మాత్రమే. వైద్య సలహా కోసం మీ వైద్యుడిని సంప్రదించండి.',
+  Telugu: 'ఈ నివేదిక సమాచారం కోసం మాత్రమే. వైద్య సలహా కోసం మీ వైద్యుడిని సంప్రదించండి.',
+  kn: 'ಈ ವರದಿ ಮಾಹಿತಿಗಾಗಿ ಮಾತ್ರ. ವೈದ್ಯಕೀಯ ಸಲಹೆಗೆ ನಿಮ್ಮ ವೈದ್ಯರನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+  Kannada: 'ಈ ವರದಿ ಮಾಹಿತಿಗಾಗಿ ಮಾತ್ರ. ವೈದ್ಯಕೀಯ ಸಲಹೆಗೆ ನಿಮ್ಮ ವೈದ್ಯರನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+  ml: 'ഈ റിപ്പോർട്ട് വിവരങ്ങൾക്കായി മാത്രമാണ്. മെഡിക്കൽ सलाहയ്ക്ക് നിങ്ങളുടെ ഡോക്ടറെ സമീപിക്കുക.',
+  Malayalam: 'ഈ റിപ്പോർട്ട് വിവരങ്ങൾക്കായി മാത്രമാണ്. മെഡിക്കൽ सलाहയ്ക്ക് നിങ്ങളുടെ ഡോക്ടറെ സമീപിക്കുക.',
+  bn: 'এই রিপোর্টটি শুধুমাত্র তথ্যে ব্যবহারের জন্য। চিকিৎসা পরামর্শের জন্য আপনার চিকিৎসকের কাছে যান।',
+  Bengali: 'এই রিপোর্টটি শুধুমাত্র তথ্যে ব্যবহারের জন্য। চিকিৎসা পরামর্শের জন্য আপনার চিকিৎসকের কাছে যান।',
+  mr: 'हा अहवाल फक्त माहितीसाठी आहे. वैद्यकीय सल्ल्यासाठी आपल्या डॉक्टरांना भेटा.',
+  Marathi: 'हा अहवाल फक्त माहितीसाठी आहे. वैद्यकीय सल्ल्यासाठी आपल्या डॉक्टरांना भेटा.',
+  gu: 'આ રિપોર્ટ માત્ર માહિતી માટે છે. તબીબી સલાહ માટે તમારા ડોક્ટરનો સંપર્ક કરો.',
+  Gujarati: 'આ રિપોર્ટ માત્ર માહિતી માટે છે. તબીબી સલાહ માટે તમારા ડોક્ટરનો સંપર્ક કરો.',
+  pa: 'ਇਹ ਰਿਪੋਰਟ ਸਿਰਫ ਜਾਣਕਾਰੀ ਲਈ ਹੈ। ਡਾਕਟਰੀ ਸਲਾਹ ਲਈ ਆਪਣੇ ਡਾਕਟਰ ਨਾਲ ਸਲਾਹ ਕਰੋ।',
+  Punjabi: 'ਇਹ ਰਿਪੋਰਟ ਸਿਰਫ ਜਾਣਕਾਰੀ ਲਈ ਹੈ। ਡਾਕਟਰੀ ਸਲਾਹ ਲਈ ਆਪਣੇ ਡਾਕਟਰ ਨਾਲ ਸਲਾਹ ਕਰੋ।',
+}
+
 interface PdfExportContentProps {
   patientName: string
   reportDate: string
@@ -24,6 +47,21 @@ interface PdfExportContentProps {
   summary: string
   detailedText?: string
   insights: { icon: string; title: string; body: string }[]
+}
+
+const PDF_LABELS: Record<string, { report: string; summary: string; values: string; abnormal: string; parameter: string; normal: string; status: string; insights: string; disclaimerTitle: string }> = {
+  en: { report: 'Simplified Medical Report', summary: 'Report Summary', values: 'values', abnormal: 'abnormal', parameter: 'Parameter', normal: 'Normal', status: 'Status', insights: 'Health Insights & Recommendations', disclaimerTitle: 'Medical disclaimer' },
+  ta: { report: 'எளிமைப்படுத்தப்பட்ட மருத்துவ அறிக்கை', summary: 'அறிக்கைச் சுருக்கம்', values: 'மதிப்புகள்', abnormal: 'மாறுபட்டவை', parameter: 'மதிப்பீடு', normal: 'இயல்பு', status: 'நிலை', insights: 'ஆரோக்கிய நுண்ணறிவுகள் & பரிந்துரைகள்', disclaimerTitle: 'மருத்துவ எச்சரிக்கை' },
+  hi: { report: 'सरल चिकित्सा रिपोर्ट', summary: 'रिपोर्ट सारांश', values: 'मान', abnormal: 'असामान्य', parameter: 'पैरामीटर', normal: 'सामान्य', status: 'स्थिति', insights: 'स्वास्थ्य जानकारी और सिफारिशें', disclaimerTitle: 'चिकित्सा अस्वीकरण' },
+  te: { report: 'సులభమైన వైద్య నివేదిక', summary: 'నివేదిక సారాంశం', values: 'విలువలు', abnormal: 'అసాధారణం', parameter: 'పారామీటర్', normal: 'సాధారణం', status: 'స్థితి', insights: 'ఆరోగ్య సూచనలు & సిఫార్సులు', disclaimerTitle: 'వైద్య నిబంధన' },
+  kn: { report: 'ಸರಳೀಕೃತ ವೈದ್ಯಕೀಯ ವರದಿ', summary: 'ವರದಿ ಸಾರಾಂಶ', values: 'ಮೌಲ್ಯಗಳು', abnormal: 'ಅಸಾಮಾನ್ಯ', parameter: 'ಪ್ಯಾರಾಮೀಟರ್', normal: 'ಸಾಮಾನ್ಯ', status: 'ಸ್ಥಿತಿ', insights: 'ಆರೋಗ್ಯ ಒಳನೋಟಗಳು & ಶಿಫಾರಸುಗಳು', disclaimerTitle: 'ವೈದ್ಯಕೀಯ ಎಚ್ಚರಿಕೆ' },
+  ml: { report: 'ലളിതമാക്കിയ മെഡിക്കൽ റിപ്പോർട്ട്', summary: 'റിപ്പോർട്ട് സംഗ്രഹം', values: 'മൂല്യങ്ങൾ', abnormal: 'അസാധാരണം', parameter: 'പാരാമീറ്റർ', normal: 'സാധാരണം', status: 'സ്ഥിതി', insights: 'ആരോഗ്യ നിർദ്ദേശങ്ങളും ശുപാർശകളും', disclaimerTitle: 'വೈദ്യപരമായ അറിയിപ്പ്' },
+  mr: { report: 'सोपे वैद्यकीय अहवाल', summary: 'अहवाल सारांश', values: 'मूल्ये', abnormal: 'असामान्य', parameter: 'पॅरामीटर', normal: 'सामान्य', status: 'स्थिती', insights: 'आरोग्य माहिती आणि शिफारसी', disclaimerTitle: 'वैद्यकीय सूचना' },
+  bn: { report: 'সহজীকৃত মেডিকেল রিপোর্ট', summary: 'রিপোর্ট সারাংশ', values: 'মান', abnormal: 'অস্বাভাবিক', parameter: 'প্যারামিটার', normal: 'সাধারণ', status: 'অবস্থা', insights: 'স্বাস্থ্য অন্তর্দৃষ্টি ও সুপারিশ', disclaimerTitle: 'চিকিৎসা সতর্কতা' },
+  gu: { report: 'સરળ તબીબી રિપોર્ટ', summary: 'રિપોર્ટ सारांश', values: 'મૂલ્યો', abnormal: 'અસામાન્ય', parameter: 'પેરામીટર', normal: 'સામાન્ય', status: 'સ્થિતિ', insights: 'આરોગ્ય માહિતી અને સૂચનો', disclaimerTitle: 'તબીબી disclaimer' },
+  pa: { report: 'ਸਰਲ ਮੈਡੀਕਲ ਰਿਪੋਰਟ', summary: 'ਰਿਪੋਰਟ ਸਾਰ', values: 'ਮੁੱਲ', abnormal: 'ਅਸਾਮਾਨਕ', parameter: 'ਪੈਰਾਮੀਟਰ', normal: 'ਸਧਾਰਨ', status: 'ਸਥਿਤੀ', insights: 'ਸਿਹਤ ਜਾਣਕਾਰੀ ਅਤੇ ਸਿਫਾਰਸ਼ਾਂ', disclaimerTitle: 'ਮੈਡੀਕਲ चेतਾਵनी' },
+  or: { report: 'ସରଳ ଚିକିତ୍ସା ରିପୋର୍ଟ', summary: 'ରିପୋର୍ଟ ସାରାଂଶ', values: 'ମୂଲ୍ୟ', abnormal: 'ଅସାମାନ୍ୟ', parameter: 'ପାରାମିଟର', normal: 'ସାମାନ୍ୟ', status: 'ସ୍ଥିତି', insights: 'ସ୍ୱାସ୍ଥ୍ୟ ସୂଚନା ଓ ସୁପାରିଶ', disclaimerTitle: 'ଚିକିତ୍ସା ସୂଚନା' },
+  ur: { report: 'آسان طبی رپورٹ', summary: 'رپورٹ کا خلاصہ', values: 'قدریں', abnormal: 'غیر معمولی', parameter: 'پیرامیٹر', normal: 'عام', status: 'حیثیت', insights: 'صحت کی بصیرت اور سفارشات', disclaimerTitle: 'طبی اعلان' },
 }
 
 const STATUS_COLORS = {
@@ -41,6 +79,11 @@ export default function PdfExportContent({
   detailedText,
   insights,
 }: PdfExportContentProps) {
+  const languageCode = language.toLowerCase().trim().startsWith('tamil') ? 'ta' :
+    ({ tamil: 'ta', english: 'en', hindi: 'hi', telugu: 'te', kannada: 'kn', malayalam: 'ml', marathi: 'mr', bengali: 'bn', gujarati: 'gu', punjabi: 'pa', odia: 'or', urdu: 'ur' } as Record<string, string>)[language.toLowerCase().trim()] || language.toLowerCase().trim()
+  const labels = PDF_LABELS[languageCode] || PDF_LABELS.en
+  const allParams = sections.flatMap(section => section.params)
+  const abnormalCount = allParams.filter(param => param.status !== 'normal').length
   const generatedAt = new Date().toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -53,8 +96,9 @@ export default function PdfExportContent({
         position: 'absolute',
         left: '-9999px',
         top: 0,
-        visibility: 'hidden',
+        visibility: 'visible',
         width: '800px',
+        minHeight: '1120px',
         background: '#FDFCFA',
         color: '#1A2420',
         fontFamily: "'Inter', 'DM Sans', Arial, sans-serif",
@@ -76,7 +120,7 @@ export default function PdfExportContent({
             ArogyaGPT
           </div>
           <div style={{ fontSize: '13px', color: '#8FA49E', letterSpacing: '0.04em' }}>
-            Simplified Medical Report
+            {labels.report}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -109,7 +153,7 @@ export default function PdfExportContent({
           padding: '24px',
         }}>
           <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#8FA49E', marginBottom: '10px' }}>
-            Report Summary
+            {labels.summary}
           </div>
           <p style={{
             fontFamily: "'Fraunces', Georgia, serif",
@@ -137,7 +181,10 @@ export default function PdfExportContent({
               paddingBottom: '8px',
               marginBottom: '12px',
             }}>
-              {section.name}
+              <div>{section.name}</div>
+              <div style={{ marginTop: '4px', fontSize: '12px', fontWeight: 500, color: '#A96E2E' }}>
+                {section.params.length} {labels.values} · {section.params.filter(param => param.status !== 'normal').length} {labels.abnormal}
+              </div>
             </div>
 
             {/* Column headers */}
@@ -149,7 +196,7 @@ export default function PdfExportContent({
               borderBottom: '0.5px solid #E8E4DF',
               marginBottom: '2px',
             }}>
-              {['Parameter', 'Your Value', 'Status'].map(h => (
+              {[labels.parameter, 'Your Value', labels.status].map(h => (
                 <span key={h} style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8FA49E' }}>{h}</span>
               ))}
             </div>
@@ -266,8 +313,7 @@ export default function PdfExportContent({
       }}>
         <div style={{ fontSize: '11px', color: '#8FA49E' }}>Generated by ArogyaGPT</div>
         <div style={{ fontSize: '11px', color: '#8FA49E', fontStyle: 'italic', textAlign: 'center', lineHeight: '1.5' }}>
-          This report is for informational purposes only.<br />
-          Consult your doctor for medical advice.
+          {PDF_DISCLAIMER_MAP[language] || PDF_DISCLAIMER_MAP.en}
         </div>
         <div style={{ fontSize: '11px', color: '#8FA49E', textAlign: 'right' }}>{generatedAt}</div>
       </div>

@@ -17,8 +17,6 @@ const STATIC_LANGUAGES = [
   { language: 'Marathi', code: 'mr', tone: 'Text translation · Voice coming soon' },
   { language: 'Gujarati', code: 'gu', tone: 'Text translation · Voice coming soon' },
   { language: 'Punjabi', code: 'pa', tone: 'Text translation · Voice coming soon' },
-  { language: 'Odia', code: 'or', tone: 'Text translation · Voice coming soon' },
-  { language: 'Urdu', code: 'ur', tone: 'Text translation · Voice coming soon' },
 ]
 
 export default function TranslationPage({ onNavigate }: TranslationPageProps) {

@@ -145,8 +145,15 @@ export default function SettingsPage({ onNavigate }: SettingsPageProps) {
                     <label className="block text-[13px] font-medium text-gray-700 mb-2">Language</label>
                     <select className="w-full h-12 rounded-[14px] border border-gray-200 bg-gray-50/50 px-4 text-[15px] text-gray-900 focus:bg-white focus:border-[#16A34A] focus:ring-1 focus:ring-[#16A34A] outline-none transition-all appearance-none cursor-pointer">
                       <option>English</option>
-                      <option>Spanish</option>
-                      <option>French</option>
+                      <option>Hindi</option>
+                      <option>Tamil</option>
+                      <option>Telugu</option>
+                      <option>Kannada</option>
+                      <option>Malayalam</option>
+                      <option>Marathi</option>
+                      <option>Bengali</option>
+                      <option>Gujarati</option>
+                      <option>Punjabi</option>
                     </select>
                   </div>
                 </div>
